@@ -1,0 +1,13 @@
+[project]
+name = "random-phase-measurements"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "h5py>=3.16.0",
+    "jax[cuda12]>=0.10.0",
+    "matplotlib>=3.10.8",
+    "slmcontrol>=0.3.1",
+    "tqdm>=4.67.3",
+]
