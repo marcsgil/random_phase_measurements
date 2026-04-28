@@ -6,11 +6,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 import itertools
 import h5py
-
-
-def gaussian2d(xy, x0, y0, sigma, amplitude, background):
-    xs, ys = xy
-    return (amplitude * np.exp(-((xs - x0)**2 + (ys - y0)**2) / (2 * sigma**2)) + background).ravel()
+from utils import resize_and_center
 
 
 def fit_centroid(image, threshold = 0.5):
@@ -90,28 +86,32 @@ def fit_affine(slm_points, cam_points):
     return A, t, residuals
 
 
-def direct_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, n):
+def direct_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, target_shape, n):
     y0, x0 = centers[n]
-    mode = np.exp(-((xs - x0)**2 + (ys - y0)**2) / (2 * sigma**2))
-    return slmcontrol.generate_hologram(
-        np.concatenate([np.ones_like(mode), mode], axis=1),
-        two_pi_modulation, xperiod, yperiod,
-    )
+    _mode = np.exp(-((xs - x0)**2 + (ys - y0)**2) / (2 * sigma**2))
+    mode = resize_and_center(_mode, target_shape, 1)
 
-def reciprocal_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, n):
+    holo1 = slmcontrol.generate_hologram(np.ones_like(mode), two_pi_modulation, xperiod, yperiod)
+    holo2 = slmcontrol.generate_hologram(mode, two_pi_modulation, xperiod, yperiod)
+
+    return np.concatenate([holo1, holo2], axis=1)
+
+def reciprocal_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, target_shape, n):
     ky, kx = centers[n]
     Ny, Nx = xs.shape
-    mode = np.exp(-((xs - Nx //2)**2 + (ys - Ny //2)**2) / (2 * sigma**2) + 2j * np.pi * ((kx - Nx //2) * xs / Nx + (ky - Ny //2)*ys / Ny))
-    return slmcontrol.generate_hologram(
-        np.concatenate([np.ones_like(mode), mode], axis=1),
-        two_pi_modulation, xperiod, yperiod,
-    )
+    _mode = np.exp(-((xs - Nx //2)**2 + (ys - Ny //2)**2) / (2 * sigma**2) + 2j * np.pi * ((kx - Nx //2) * xs / Nx + (ky - Ny //2)*ys / Ny))
+    mode = resize_and_center(_mode, target_shape, 1)
+
+    holo1 = slmcontrol.generate_hologram(np.ones_like(mode), two_pi_modulation, xperiod, yperiod)
+    holo2 = slmcontrol.generate_hologram(mode, two_pi_modulation, xperiod, yperiod)
+
+    return np.concatenate([holo1, holo2], axis=1)
 
 def _measure(dataset, camera, n):
     dataset[n] = np.flip(camera.capture(), axis=0)
 
-def calibrate(_prepare, camera, xs, ys, centers, sigma):
-    prepare = partial(_prepare, xs, ys, 192, -3, 19, centers, sigma) 
+def calibrate(_prepare, camera, xs, ys, centers, sigma, target_shape):
+    prepare = partial(_prepare, xs, ys, 192, -3, 19, centers, sigma, target_shape) 
     test_img = camera.capture()
     images = np.empty((n**2, *test_img.shape), test_img.dtype)
     measure = partial(_measure, images, camera)
@@ -149,26 +149,28 @@ if __name__ == "__main__":
     camera_xi = XimeaCamera()
     camera_xi.set_exposure(100)
 
-    _xs = np.arange(slm.width // 2)
-    _ys = np.arange(slm.height)
+    _xs = np.arange(512)
+    _ys = np.arange(512)
     xs, ys = np.meshgrid(_xs, _ys)
 
     n = 6
 
-    x0s = np.linspace(-70, 70, n) + slm.width // 4
-    y0s = np.linspace(-70, 70, n) + slm.height // 2
+    x0s = np.linspace(-70, 70, n) + len(_xs) // 2
+    y0s = np.linspace(-70, 70, n) + len(_ys) // 2
 
     centers_direct = np.array(list(itertools.product(y0s, x0s)))
 
-    kxs = np.linspace(-30, 30, n) + slm.width // 4
-    kys = np.linspace(-30, 30, n) + slm.height // 2
+    kxs = np.linspace(-12, 12, n) + len(_xs) // 2
+    kys = np.linspace(-12, 12, n) + len(_ys) // 2
     centers_reciprocal = np.array(list(itertools.product(kys, kxs)))
 
+    target_shape = (slm.height, slm.width // 2)
+
     print(10 * "-" + "Direct Calibration" + 10 * "-")
-    A_direct, t_direct, images_direct = calibrate(direct_prepare, camera_is, xs, ys, centers_direct, 15)
+    A_direct, t_direct, images_direct = calibrate(direct_prepare, camera_is, xs, ys, centers_direct, 15, target_shape)
 
     print(10 * "-" + "Reciprocal Calibration" + 10 * "-")
-    A_reciprocal, t_reciprocal, images_reciprocal = calibrate(reciprocal_prepare, camera_xi, xs, ys, centers_reciprocal, 30)
+    A_reciprocal, t_reciprocal, images_reciprocal = calibrate(reciprocal_prepare, camera_xi, xs, ys, centers_reciprocal, 30, target_shape)
 
     fig, axs = plt.subplots(n, n)
     for (im, ax) in zip(images_direct, axs.flatten()):
