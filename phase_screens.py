@@ -8,8 +8,8 @@ def gaussian_spectrum(qx, qy, amplitude, sigma):
 
 
 def fourier_phase_screen(
-    Nx: int,
     Ny: int,
+    Nx: int,
     spectrum: Callable = gaussian_spectrum,
     dx: float = 1,
     dy: float = 1,

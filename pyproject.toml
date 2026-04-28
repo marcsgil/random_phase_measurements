@@ -5,9 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "cameras[imagingsource-new]",
     "h5py>=3.16.0",
-    "jax[cuda12]>=0.10.0",
+    "ipykernel>=7.2.0",
+    "jax>=0.10.0",
     "matplotlib>=3.10.8",
-    "slmcontrol>=0.3.1",
+    "numpy>=2.4.4",
+    "slmcontrol",
     "tqdm>=4.67.3",
 ]
+
+[tool.uv.sources]
+slmcontrol = { path = "../slmcontrol", editable = true }
+cameras = { git = "https://github.com/loquff/cameras.git" }
