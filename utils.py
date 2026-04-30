@@ -2,6 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpy as np
 from scipy.ndimage import affine_transform
+from slmcontrol import generate_hologram
 
 
 def crop_center(img, size):
@@ -102,3 +103,17 @@ def resize_and_center(img, target_shape, scale, order=1, cval=0):
             for c in range(img.shape[2])
         ]
         return np.stack(channels, axis=-1)
+    
+def generate_amplitude_and_phase_hologram(mode, phase, two_pi_modulation, xperiod, yperiod):
+    # xs, ys = np.indices(mode.shape)
+    # phase_total = phase + 2*np.pi*(xs/xperiod + ys/yperiod)
+    # phase_wrapped = np.mod(phase_total, 2*np.pi)
+
+    # holo1 = np.uint8(np.round(
+    #     phase_wrapped * (two_pi_modulation / (2*np.pi))
+    # ))
+
+    holo1 = generate_hologram(np.exp(1j * np.flip(phase)), two_pi_modulation, xperiod, yperiod)
+    holo2 = generate_hologram(mode, two_pi_modulation, xperiod, yperiod)
+
+    return np.concatenate([holo1, holo2], axis=1)

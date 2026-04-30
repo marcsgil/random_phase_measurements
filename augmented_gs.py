@@ -45,8 +45,11 @@ def augmented_gs(
     initial_phase,
     nsteps,
 ):
-    f1 = jnp.fft.fft2
-    inv_f1 = jnp.fft.ifft2
+    def f1(x):
+        return jnp.fft.fft2(x, norm="ortho")
+
+    def inv_f1(x):
+        return jnp.fft.ifft2(x, norm="ortho")
 
     def f2(x):
         return f1(phase_transformation * x)
