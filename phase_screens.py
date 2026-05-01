@@ -4,7 +4,7 @@ from typing import Callable
 
 
 def gaussian_spectrum(qx, qy, amplitude, sigma):
-    return amplitude * jnp.exp(-(qx**2 + qy**2) / 2 / sigma**2)
+    return amplitude * jnp.exp(-(qx**2 + qy**2) / 2 / sigma**2) / 2 / jnp.pi / sigma**2
 
 
 def fourier_phase_screen(
@@ -29,7 +29,7 @@ def fourier_phase_screen(
     return (
         jnp.mod(
             jnp.real(
-                jnp.fft.ifft2(random_numbers * jnp.sqrt(spectrum_value), norm="ortho")
+                jnp.fft.ifft2(random_numbers * jnp.sqrt(spectrum_value), norm="forward")
             ),
             2 * jnp.pi,
         )

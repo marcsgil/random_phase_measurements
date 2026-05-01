@@ -1,5 +1,3 @@
-from statistics import mode
-
 import numpy as np
 import slmcontrol
 from cameras.ImagingSourceNew import ImagingSourceCamera
@@ -90,24 +88,26 @@ def fit_affine(input_points, target_points):
     return A, t, residuals
 
 
-def direct_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, n):
+def direct_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, hologram_shape, n):
     y0, x0 = centers[n]
     mode = np.exp(-((xs - x0)**2 + (ys - y0)**2) / (2 * sigma**2))
+    mode_holo = resize_and_center(mode, hologram_shape, 1)
 
-    return generate_amplitude_and_phase_hologram(mode, np.zeros_like(mode), two_pi_modulation, xperiod, yperiod)
+    return generate_amplitude_and_phase_hologram(mode_holo, np.zeros_like(mode_holo), two_pi_modulation, xperiod, yperiod)
 
-def fourier_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, n):
+def fourier_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma, hologram_shape, n):
     ky, kx = centers[n]
     Ny, Nx = xs.shape
     mode = np.exp(-((xs - Nx //2)**2 + (ys - Ny //2)**2) / (2 * sigma**2) + 2j * np.pi * ((kx - Nx //2) * xs / Nx + (ky - Ny //2)*ys / Ny))
+    mode_holo = resize_and_center(mode, hologram_shape, 1)
 
-    return generate_amplitude_and_phase_hologram(mode, np.zeros_like(mode), two_pi_modulation, xperiod, yperiod)
+    return generate_amplitude_and_phase_hologram(mode_holo, np.zeros_like(mode_holo), two_pi_modulation, xperiod, yperiod)
 
 def _measure(dataset, camera, roi, n):
     dataset[n] = camera.capture(roi=roi)
 
-def calibrate(_prepare, camera, roi, xs, ys, centers, sigma):
-    prepare = partial(_prepare, xs, ys, 192, -3, 19, centers, sigma) 
+def calibrate(_prepare, camera, roi, xs, ys, centers, sigma, hologram_shape):
+    prepare = partial(_prepare, xs, ys, 192, -3, 19, centers, sigma, hologram_shape) 
     test_img = camera.capture(roi=roi)
     images = np.empty((n**2, *test_img.shape), test_img.dtype)
     measure = partial(_measure, images, camera, roi)
@@ -149,25 +149,26 @@ def get_most_frequent(arr):
 
 def determine_center(slm, camera, xs, ys, sigma):
     mode = np.exp(-((xs - xs.mean())**2 + (ys - ys.mean())**2) / (2 * sigma**2))
-    holo = generate_amplitude_and_phase_hologram(mode, np.zeros_like(mode), 192, -3, 19)
+    mode_holo = resize_and_center(mode, (slm.height, slm.width // 2), 1)
+    holo = generate_amplitude_and_phase_hologram(mode_holo, np.zeros_like(mode_holo), 192, -3, 19)
     slm.updateArray(holo)
     centroid = fit_centroid(camera.capture())
     return int(centroid[0]), int(centroid[1])
 
 
 if __name__ == "__main__":
-    SIZE = 512
-    n = 3
-    XMAX = 50
-    FMAX = 15
+    SIZE = 512 + 128
+    n = 6
+    XMAX = 40
+    FMAX = 10
 
     slm = slmcontrol.SLMDisplay(host="localhost")
 
     Ny = slm.height
     Nx = slm.width // 2
 
-    _xs = np.arange(Nx)
-    _ys = np.arange(Ny)
+    _xs = np.arange(SIZE)
+    _ys = np.arange(SIZE)
     xs, ys = np.meshgrid(_xs, _ys)
 
     camera_direct = ImagingSourceCamera()
@@ -191,23 +192,23 @@ if __name__ == "__main__":
          center_fourier[1] + SIZE // 2])
     
 
-    x0s = np.linspace(-XMAX, XMAX, n) + Nx // 2
-    y0s = np.linspace(-XMAX, XMAX, n) + Ny // 2
+    x0s = np.linspace(-XMAX, XMAX, n) + SIZE // 2
+    y0s = np.linspace(-XMAX, XMAX, n) + SIZE // 2
 
     centers_direct = np.array(list(itertools.product(y0s, x0s)))
 
-    fxs = np.linspace(-FMAX, FMAX, n) + Nx // 2
-    fys = np.linspace(-FMAX, FMAX, n) + Ny // 2
+    fxs = np.linspace(-FMAX, FMAX, n) + SIZE // 2
+    fys = np.linspace(-FMAX, FMAX, n) + SIZE // 2
 
     centers_fourier = np.array(list(itertools.product(fys, fxs)))
 
     target_shape = (slm.height, slm.width // 2)
 
     print(10 * "-" + "Direct Calibration" + 10 * "-")
-    A_direct, t_direct, images_direct = calibrate(direct_prepare, camera_direct, roi_direct, xs, ys, centers_direct, 15)
+    A_direct, t_direct, images_direct = calibrate(direct_prepare, camera_direct, roi_direct, xs, ys, centers_direct, 15, (Ny, Nx))
 
     print(10 * "-" + "fourier Calibration" + 10 * "-")
-    A_fourier, t_fourier, images_fourier = calibrate(fourier_prepare, camera_fourier, roi_fourier, xs, ys, centers_fourier, 50)
+    A_fourier, t_fourier, images_fourier = calibrate(fourier_prepare, camera_fourier, roi_fourier, xs, ys, centers_fourier, 50, (Ny, Nx))
 
     plt.clf()
     plt.imshow(np.mean(images_direct, axis=0))
@@ -224,6 +225,7 @@ if __name__ == "__main__":
         f["t_fourier"] = t_fourier
         f["roi_direct"] = roi_direct
         f["roi_fourier"] = roi_fourier
+        f["SIZE"] = SIZE
 
     camera_direct.close()
     slm.close()
