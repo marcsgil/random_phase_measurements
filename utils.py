@@ -1,8 +1,8 @@
 import jax.numpy as jnp
 import numpy as np
-import numpy as np
 from scipy.ndimage import affine_transform
 from slmcontrol import generate_hologram
+from numpy.linalg import qr
 
 
 def crop_center(img, size):
@@ -102,18 +102,82 @@ def resize_and_center(img, target_shape, scale, order=1, cval=0):
             )
             for c in range(img.shape[2])
         ]
-        return np.stack(channels, axis=-1)
+        return np.stack(channels, axis=0)
     
-def generate_amplitude_and_phase_hologram(mode, phase, two_pi_modulation, xperiod, yperiod):
-    # xs, ys = np.indices(mode.shape)
-    # phase_total = phase + 2*np.pi*(xs/xperiod + ys/yperiod)
-    # phase_wrapped = np.mod(phase_total, 2*np.pi)
+def fourier_transform(mode):
+    return np.fft.fftshift(np.fft.fft2(np.fft.fftshift(mode)))
 
-    # holo1 = np.uint8(np.round(
-    #     phase_wrapped * (two_pi_modulation / (2*np.pi))
-    # ))
+def inverse_fourier_transform(mode):
+    return np.fft.fftshift(np.fft.ifft2(np.fft.fftshift(mode)))
 
-    holo1 = generate_hologram(np.exp(1j * np.flip(phase)), two_pi_modulation, xperiod, yperiod)
+def linear_transformation(input, A, output_shape=None):
+    if not output_shape:
+        output_shape = input.shape
+    input_center = (np.array([*input.shape])) / 2
+    output_center = (np.array([*output_shape])) / 2
+
+    # Offset to align centers
+    offset = input_center -  A @ output_center
+
+    return affine_transform(input, A, offset, output_shape=output_shape)
+    
+def generate_amplitude_and_phase_hologram(mode, phase, two_pi_modulation, xperiod, yperiod, unitary=None, slm_shape=None):
+    if slm_shape is not None:
+        mode = resize_and_center(mode, slm_shape, 1)
+        phase = resize_and_center(phase, slm_shape, 1)
+
+    phase_transformation = np.exp(1j * phase)
+
+    if unitary is not None:
+        phase_transformation = linear_transformation(phase_transformation, unitary)
+
+    ys, xs = np.indices(mode.shape)
+
+    phase_total = -np.angle(phase_transformation) - 2*np.pi*(xs/xperiod + ys/yperiod)
+    phase_wrapped = np.mod(phase_total, 2*np.pi)
+
+    holo1 = np.uint8(np.round(
+        phase_wrapped * (two_pi_modulation / (2*np.pi))
+    ))
+
     holo2 = generate_hologram(mode, two_pi_modulation, xperiod, yperiod)
 
     return np.concatenate([holo1, holo2], axis=1)
+
+def complex_randn(*shape):
+    """
+    Generate an array of complex numbers with random real and imaginary parts.
+
+    Parameters:
+        shape (tuple): The shape of the output array.
+
+    Returns:
+        (ArrayLike): An array of complex numbers with the specified shape.
+    """
+    return (np.random.randn(*shape).astype(np.float32)
+            + 1j * np.random.randn(*shape).astype(np.float32))
+
+def sample_haar_vectors(n_samples: int, dim: int):
+    """
+    Generate random Haar vectors.
+
+    Args:
+        n_samples (int): Number of Haar vectors to generate.
+        dim (int): Dimension of the Haar vectors.
+
+    Returns:
+        ArrayLike: Array of random Haar vectors.
+
+    References:
+        https://pennylane.ai/qml/demos/tutorial_haar_measure/
+    """
+
+    Zs = complex_randn(n_samples, dim, dim)
+    result = np.empty((n_samples, dim), dtype=np.complex64)
+
+    for n, Z in enumerate(Zs):
+        Q, R = qr(Z)
+        lambd = np.diag(R)
+        result[n, :] = (Q @ np.diag(lambd) / np.abs(lambd))[0, :]
+
+    return result

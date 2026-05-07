@@ -1,0 +1,4 @@
+[deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+QuantumMeasurements = "5d8d2b8f-00a2-4aa7-ae68-34a984b4e8b6"

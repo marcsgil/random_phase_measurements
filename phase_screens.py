@@ -14,6 +14,7 @@ def fourier_phase_screen(
     dx: float = 1,
     dy: float = 1,
     key: Array = random.key(42),
+    num_samples = None,
     **kwargs,
 ) -> Array:
     qxs = jnp.fft.fftfreq(Nx, d=dx / 2 / jnp.pi)
@@ -24,7 +25,13 @@ def fourier_phase_screen(
     dqy = qys[1] - qys[0]
 
     spectrum_value = spectrum(Qxs, Qys, **kwargs) * dqx * dqy
-    random_numbers = random.normal(key, shape=(Ny, Nx), dtype=jnp.complex64)
+
+    if num_samples is None:
+        shape=(Ny, Nx)
+    else:
+        shape=(num_samples, Ny, Nx)
+
+    random_numbers = random.normal(key, shape=shape, dtype=jnp.complex64)
 
     return (
         jnp.mod(

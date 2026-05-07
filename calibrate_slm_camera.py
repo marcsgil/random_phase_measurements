@@ -106,7 +106,7 @@ def fourier_prepare(xs, ys, two_pi_modulation, xperiod, yperiod, centers, sigma,
 def _measure(dataset, camera, roi, n):
     dataset[n] = camera.capture(roi=roi)
 
-def calibrate(_prepare, camera, roi, xs, ys, centers, sigma, hologram_shape):
+def calibrate(_prepare, slm, camera, roi, xs, ys, centers, sigma, hologram_shape, n):
     prepare = partial(_prepare, xs, ys, 192, -3, 19, centers, sigma, hologram_shape) 
     test_img = camera.capture(roi=roi)
     images = np.empty((n**2, *test_img.shape), test_img.dtype)
@@ -155,15 +155,7 @@ def determine_center(slm, camera, xs, ys, sigma):
     centroid = fit_centroid(camera.capture())
     return int(centroid[0]), int(centroid[1])
 
-
-if __name__ == "__main__":
-    SIZE = 512 + 128
-    n = 6
-    XMAX = 40
-    FMAX = 10
-
-    slm = slmcontrol.SLMDisplay(host="localhost")
-
+def main(slm, camera_direct, camera_fourier, SIZE = 640, n = 6, XMAX = 40, FMAX = 10):
     Ny = slm.height
     Nx = slm.width // 2
 
@@ -171,10 +163,7 @@ if __name__ == "__main__":
     _ys = np.arange(SIZE)
     xs, ys = np.meshgrid(_xs, _ys)
 
-    camera_direct = ImagingSourceCamera()
     camera_direct.set_exposure(100)
-
-    camera_fourier = XimeaCamera()
     camera_fourier.set_exposure(100)
 
     center_direct = determine_center(slm, camera_direct, xs, ys, 50)
@@ -202,13 +191,11 @@ if __name__ == "__main__":
 
     centers_fourier = np.array(list(itertools.product(fys, fxs)))
 
-    target_shape = (slm.height, slm.width // 2)
-
     print(10 * "-" + "Direct Calibration" + 10 * "-")
-    A_direct, t_direct, images_direct = calibrate(direct_prepare, camera_direct, roi_direct, xs, ys, centers_direct, 15, (Ny, Nx))
+    A_direct, t_direct, images_direct = calibrate(direct_prepare, slm, camera_direct, roi_direct, xs, ys, centers_direct, 15, (Ny, Nx), n)
 
-    print(10 * "-" + "fourier Calibration" + 10 * "-")
-    A_fourier, t_fourier, images_fourier = calibrate(fourier_prepare, camera_fourier, roi_fourier, xs, ys, centers_fourier, 50, (Ny, Nx))
+    print(10 * "-" + "Fourier Calibration" + 10 * "-")
+    A_fourier, t_fourier, images_fourier = calibrate(fourier_prepare, slm, camera_fourier, roi_fourier, xs, ys, centers_fourier, 50, (Ny, Nx), n)
 
     plt.clf()
     plt.imshow(np.mean(images_direct, axis=0))
@@ -227,5 +214,11 @@ if __name__ == "__main__":
         f["roi_fourier"] = roi_fourier
         f["SIZE"] = SIZE
 
-    camera_direct.close()
+if __name__ == "__main__":
+    slm = slmcontrol.SLMDisplay(host="localhost")
+    camera_direct = ImagingSourceCamera()
+    camera_fourier = XimeaCamera()
+    main(slm, camera_direct, camera_fourier)
     slm.close()
+    camera_direct.close()
+    camera_fourier.close()

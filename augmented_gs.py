@@ -14,6 +14,11 @@ def fidelity(u1, u2):
         jnp.abs(jnp.vdot(_u1, _u2)) ** 2 / jnp.vdot(_u1, _u1) / jnp.vdot(_u2, _u2)
     )
 
+def amplitude_fidelity(u1, u2):
+    _u1 = jnp.complex64(u1)
+    _u2 = jnp.complex64(u2)
+    return(fidelity(_u1, _u2))
+
 
 def gs_step(A0, A1, f, inv_f, phase):
     field0 = A0 * jnp.exp(1j * phase)
