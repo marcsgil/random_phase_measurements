@@ -181,3 +181,29 @@ def sample_haar_vectors(n_samples: int, dim: int):
         result[n, :] = (Q @ np.diag(lambd) / np.abs(lambd))[0, :]
 
     return result
+
+def mean_capture(camera, n, roi=None):
+    first_image = camera.capture(roi=roi)
+    buffer = np.empty((n, *first_image.shape), dtype=first_image.dtype)
+    buffer[0] = first_image
+    for i in range(1, n):
+        buffer[i] = camera.capture(roi=roi)
+    return np.mean(buffer, axis=0).astype(first_image.dtype)
+
+def optimize_exposure(camera, initial_exposure, min_exposure, max_exposure, alpha=1.05, ncycles=20, nmean=10, threshold=50, nbins=20, roi=None):
+    exposure = np.clip(initial_exposure, min_exposure, max_exposure)
+
+    for i in range(ncycles):
+        camera.set_exposure(exposure)
+        x = mean_capture(camera, nmean, roi=roi)
+        x = x[x>threshold]
+        counts, _ = np.histogram(x, bins=nbins, range=(threshold, 255))
+
+        signal = 1 - counts[-1] / max(counts[-2], 1)
+
+        exposure = np.clip(exposure * (alpha ** signal), min_exposure, max_exposure)
+
+    return np.clip(exposure * 0.8, min_exposure, max_exposure)
+
+def remove_background(img, bg):
+    return np.where(img > bg, img - bg, 0)

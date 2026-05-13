@@ -8,7 +8,8 @@ dependencies = [
     "cameras[imagingsource-new]",
     "h5py>=3.16.0",
     "ipykernel>=7.2.0",
-    "jax>=0.10.0",
+    "jax[cuda13]>=0.10.0 ; sys_platform == 'linux'",
+    "jax>=0.10.0 ; sys_platform != 'linux'",
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
     "slmcontrol",
@@ -18,3 +19,8 @@ dependencies = [
 [tool.uv.sources]
 slmcontrol = { path = "../slmcontrol", editable = true }
 cameras = { git = "https://github.com/loquff/cameras.git" }
+
+[tool.uv.workspace]
+members = [
+    "tomography_gpu",
+]

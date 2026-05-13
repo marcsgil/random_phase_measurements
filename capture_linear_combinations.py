@@ -1,5 +1,5 @@
 import slmcontrol
-from utils import sample_haar_vectors, generate_amplitude_and_phase_hologram, resize_and_center, fourier_transform
+from utils import sample_haar_vectors, generate_amplitude_and_phase_hologram, resize_and_center, fourier_transform, optimize_exposure
 import h5py
 import numpy as np
 from cameras.ImagingSourceNew import ImagingSourceCamera
@@ -29,6 +29,10 @@ def _prepare_phase(mode, phases, unitary, indices, slm_shape, extraction, n):
     return generate_amplitude_and_phase_hologram(mode, phase, 192, -3, 19, unitary @ np.diag([1, -1]), slm_shape=slm_shape)
 
 def _measure_no_phase(images_direct, images_fourier, camera_direct, camera_fourier, roi_direct, roi_fourier, exposures, n):
+    # if n == 0:
+    #     print("\n Optimizing Exposures \n")
+    #     exposures[0] = optimize_exposure(camera_fourier, 150, 100, 1000)
+    #     exposures[1] = optimize_exposure(camera_fourier, 100, 15, 1000)
     camera_direct.set_exposure(exposures[0])
     camera_fourier.set_exposure(exposures[1])
     images_direct[n] = camera_direct.capture(roi=roi_direct)
@@ -36,14 +40,17 @@ def _measure_no_phase(images_direct, images_fourier, camera_direct, camera_fouri
 
 def _measure_phase(images_phase_fourier, camera_fourier, roi_fourier, indices, exposures, n):
     sigma_idx, phase_idx, coeff_idx = indices[n]
-    camera_fourier.set_exposure(exposures[2])
+    # if phase_idx == 0 and coeff_idx == 0:
+    #     print("\n Optimizing Exposures \n")
+    #     exposures[2] = optimize_exposure(camera_fourier, 100, 15, 1000)
+    camera_fourier.set_exposure(exposures[sigma_idx])
     images_phase_fourier[sigma_idx, phase_idx, coeff_idx] = camera_fourier.capture(roi=roi_fourier)
         
 
-def main(slm, camera_direct, camera_fourier, modes, phases,  exposures, folder, extraction, NUM_SAMPLES = 8, MAX_MODES = None):
+def main(slm, camera_direct, camera_fourier, modes, phases, exposures_no_phase, exposures_phase, folder, extraction, NUM_SAMPLES = 8, MAX_MODES = None, opening_mode="a"):
     slm_shape = (slm.height, slm.width // 2)
 
-    with h5py.File(os.path.join(folder, "calibration", "calibration.h5")) as f:
+    with h5py.File(os.path.join("calibration", "calibration.h5")) as f:
         A_direct = f["A_direct"][:]
         t_direct = f["t_direct"][:]
         A_fourier = f["A_fourier"][:]
@@ -66,28 +73,22 @@ def main(slm, camera_direct, camera_fourier, modes, phases,  exposures, folder, 
     image_direct = camera_direct.capture(roi=roi_direct)
     image_fourier = camera_fourier.capture(roi=roi_fourier)
 
-    last_folder = os.path.basename(os.path.normpath(folder))
 
-    if last_folder == "test":
-        mode = "w"
-    else:
-        mode = "a"
-
-    with h5py.File(os.path.join(folder, "data.h5"), mode) as f:
+    with h5py.File(os.path.join(folder, "data.h5"), opening_mode) as f:
         images_direct = f.create_dataset("images_direct", (NUM_MODES, *image_direct.shape), image_direct.dtype)
         images_fourier = f.create_dataset("images_fourier", (NUM_MODES, *image_fourier.shape), image_fourier.dtype)
         images_phase_fourier = f.create_dataset("images_phase_fourier", (NUM_SIGMAS, NUM_PHASES, NUM_MODES, *image_fourier.shape), image_fourier.dtype)
 
         print(10 * "-" + "Measuring without phase" + 10 * "-")
         prepare = partial(_prepare_no_phase, modes, slm_shape, extraction)
-        measure = partial(_measure_no_phase, images_direct, images_fourier, camera_direct, camera_fourier, roi_direct, roi_fourier, exposures)
+        measure = partial(_measure_no_phase, images_direct, images_fourier, camera_direct, camera_fourier, roi_direct, roi_fourier, exposures_no_phase)
         slmcontrol.prepare_and_measure(prepare, measure, slm, 0.3, NUM_MODES)
 
         print(10 * "-" + "Measuring with phase" + 10 * "-")
         indices = list(itertools.product(range(len(sigmas)), range(NUM_PHASES), range(NUM_MODES)))
 
         prepare = partial(_prepare_phase, modes, phases, u, indices, slm_shape, extraction)
-        measure = partial(_measure_phase, images_phase_fourier, camera_fourier, roi_fourier, indices, exposures)
+        measure = partial(_measure_phase, images_phase_fourier, camera_fourier, roi_fourier, indices, exposures_phase)
         slmcontrol.prepare_and_measure(prepare, measure, slm, 0.3, len(indices))
 
     with h5py.File(os.path.join(folder, "data.h5")) as f:
@@ -186,13 +187,23 @@ def up_to_order_basis(xs, ys, w, order):
 
 
 SIZE = 640
-NUM_MODES = 400
-NUM_PHASES = 20
+NUM_MODES = 10
+NUM_PHASES = 10
 NUM_SIGMAS = 5
 
 amplitude = np.pi
-sigmas = np.linspace(0.02, 0.14, NUM_SIGMAS)
-phases_path = "results/phases.h5"
+sigmas = np.linspace(0.02, 0.04, NUM_SIGMAS)
+folder = "results/controled_exposure"
+last_folder = os.path.basename(os.path.normpath(folder))
+
+if last_folder == "test":
+    opening_mode = "w"
+else:
+    opening_mode = "a"
+
+os.makedirs(folder, exist_ok=True)
+
+phases_path = os.path.join(folder, "phases.h5")
 
 if os.path.exists(phases_path):
     with h5py.File(phases_path) as f:
@@ -212,27 +223,28 @@ _xs = np.arange(SIZE) - SIZE // 2
 _ys = np.arange(SIZE) - SIZE // 2
 xs, ys = np.meshgrid(_xs, _ys)
 
-exposures = (100, 75, 120)
+exposures_no_phase = [200, 80]
+exposures_phase = np.linspace(80, 220, NUM_SIGMAS)
 
 print(f"Estimated Time: {(NUM_MODES * (1 + NUM_PHASES * NUM_SIGMAS) * 0.3 / 60)} min/main call")
 
+calibrate_slm_camera.main(slm, camera_direct, camera_fourier, SIZE=SIZE)
+
 for n in range(1, 5):
     print(f"Capturing order up to {n} \n")
-    calibrate_slm_camera.main(slm, camera_direct, camera_fourier, SIZE=SIZE)
-    folder = os.path.join("results", f"up_to_order_{n}")
-    os.makedirs(folder, exist_ok=True)
+    sub_folder = os.path.join(folder, f"up_to_order_{n}")
+    os.makedirs(sub_folder, exist_ok=True)
     shutil.copytree("calibration", os.path.join(folder, "calibration"), dirs_exist_ok=True)
     basis = up_to_order_basis(xs, ys, 30, n)
     coefficients = sample_haar_vectors(NUM_MODES, len(basis))
 
-    with h5py.File(os.path.join(folder, "modes.h5"), "a") as f:
+    with h5py.File(os.path.join(sub_folder, "modes.h5"), opening_mode) as f:
         f["basis"] = basis
         f["coefficients"] = coefficients
-
     
     modes = (coefficients, basis)
 
-    main(slm, camera_direct, camera_fourier, modes, phases, exposures, folder, extraction_linear_combination, NUM_SAMPLES = 8, MAX_MODES=None)
+    main(slm, camera_direct, camera_fourier, modes, phases, exposures_no_phase, exposures_phase, sub_folder, extraction_linear_combination, NUM_SAMPLES = 8, MAX_MODES=None, opening_mode=opening_mode)
 
 # with h5py.File("../turbulence_compensation/data/output.h5") as file:
 #     data = file["fields"][:]
