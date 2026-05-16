@@ -150,17 +150,17 @@ std_phase_fourier = dropdims(std(phase_fourier_fidelities, dims=(1, 2)), dims=(1
 
 with_theme(theme_latexfonts()) do
     fig = Figure()
-    ax = Axis(fig[1,1], xlabel = L"\sigma", ylabel="Amplitude Fidelity", title="Diagnosis for order up to $order")
+    ax = Axis(fig[1, 1], xlabel=L"\sigma", ylabel="Amplitude Fidelity", title="Diagnosis for order up to $order")
 
     scatter!(ax, sigmas, mean_phase_fourier, color=:black)
-    errorbars!(ax, sigmas, mean_phase_fourier, std_phase_fourier, whiskerwidth = 10, color=:black)
+    errorbars!(ax, sigmas, mean_phase_fourier, std_phase_fourier, whiskerwidth=10, color=:black)
 
     hlines!(ax, mean_direct, linestyle=:dash, color=:blue)
     # band!(ax, sigmas, fill(mean_direct-std_direct, length(sigmas)), fill(mean_direct+std_direct, length(sigmas)), alpha = 0.5, color=:blue)
 
     hlines!(ax, mean_fourier, linestyle=:dash, color=:red)
     # band!(ax, sigmas, fill(mean_fourier-std_fourier, length(sigmas)), fill(mean_direct+std_direct, length(sigmas)), alpha = 0.5, color=:red)
-    
+
     ylims!(ax, high=1)
 
     save(joinpath(base_dir, "plots", "diagnosis_$order.png"), fig)
@@ -169,6 +169,8 @@ end
 ##
 
 for order in 1:4
+
+    # order = 2
 
     phase_fourier_fidelities, sigmas = h5open(joinpath(base_dir, "phases.h5")) do f_phases
         sigmas = read(f_phases["sigmas"])
@@ -202,7 +204,7 @@ for order in 1:4
 
                         Threads.@threads for m ∈ axes(phase_fourier_fidelities, 1)
                             ρ = estimate_state(remove_backgorund(images_phase_fourier[:, :, m, n, o], 5), μ, method)[1]
-                            phase_fourier_fidelities[m, n, o] = fidelity(project2pure(ρ), view(coefficients, :, m))
+                            phase_fourier_fidelities[m, n, o] = fidelity(project2pure(ρ), normalize(view(coefficients, :, m) .* vec(sqrt.(normalization))))
                             # for _ in 1:5
                             #     try
                             #         outcomes = simulate_outcomes(view(coefficients, :, m), μ, 10^5, atol=1e-3)
@@ -231,18 +233,18 @@ for order in 1:4
 
     median_phase_fourier = dropdims(median(phase_fourier_fidelities, dims=(1, 2)), dims=(1, 2))
     iqr_phase_fourier = dropdims(mapslices(phase_fourier_fidelities, dims=(1, 2)) do x
-        diff(quantile(vec(x), [0.25, 0.75])) / 2
-    end, dims=(1,2))
+            diff(quantile(vec(x), [0.25, 0.75])) / 2
+        end, dims=(1, 2))
 
 
     with_theme(theme_latexfonts()) do
         fig = Figure()
-        ax = Axis(fig[1,1], xlabel = "Fidelity", ylabel="Counts", title="Tomography for order up to $order")
+        ax = Axis(fig[1, 1], xlabel="Fidelity", ylabel="Counts", title="Tomography for order up to $order")
 
-        density!(ax, reshape(view(phase_fourier_fidelities, :, :, 1), :), color = (:red, 0.3), strokecolor = :red, strokewidth = 3, strokearound = true, 
-        label=L"\sigma=%$(sigmas[1]); \ \mathcal{F} = %$(round(100 * median_phase_fourier[1], digits=1)) \pm  %$(round(100 * iqr_phase_fourier[1], digits=1)) \%")
-        density!(ax, reshape(view(phase_fourier_fidelities, :, :, 5), :), color = (:blue, 0.3), strokecolor = :blue, strokewidth = 3, strokearound = true, 
-        label=L"\sigma=%$(sigmas[5]); \ \mathcal{F} = %$(round(100 * median_phase_fourier[5], digits=1)) \pm  %$(round(100 * iqr_phase_fourier[5], digits=1)) \%")
+        density!(ax, reshape(view(phase_fourier_fidelities, :, :, 1), :), color=(:red, 0.3), strokecolor=:red, strokewidth=3, strokearound=true,
+            label=L"\sigma=%$(sigmas[1]); \ \mathcal{F} = %$(round(100 * median_phase_fourier[1], digits=1)) \pm  %$(round(100 * iqr_phase_fourier[1], digits=1)) \%")
+        density!(ax, reshape(view(phase_fourier_fidelities, :, :, 5), :), color=(:blue, 0.3), strokecolor=:blue, strokewidth=3, strokearound=true,
+            label=L"\sigma=%$(sigmas[5]); \ \mathcal{F} = %$(round(100 * median_phase_fourier[5], digits=1)) \pm  %$(round(100 * iqr_phase_fourier[5], digits=1)) \%")
 
         axislegend(ax, position=:lt)
 
