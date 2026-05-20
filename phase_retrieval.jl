@@ -65,8 +65,47 @@ A_direct, t_direct, A_fourier, t_fourier = h5open(joinpath(base_dir, "calibratio
     reverse(read(f["t_fourier"]))
 end
 ##
-for order ∈ 3:4
+mode_idx = 1
+phase_idx = 1
+sigma_idx = 5
+order = 4
 
+phase = h5open(joinpath(base_dir, "phases.h5")) do f_phases
+    f_phases["phases"][:, :, phase_idx, sigma_idx]
+end
+
+coefficients, _direct_basis = h5open(joinpath(base_dir, "up_to_order_$order/modes.h5")) do f_modes
+    f_modes["coefficients"][:, mode_idx], read(f_modes["basis"])
+end
+
+image = h5open(joinpath(base_dir, "up_to_order_$order/data.h5")) do f_data
+    f_data["images_phase_fourier"][:, :, mode_idx, phase_idx, sigma_idx]
+end
+
+_phase_fourier_basis = fourier_transform(_direct_basis .* cis.(phase))
+phase_fourier_basis = transform_basis(_phase_fourier_basis, A_fourier, t_fourier)
+normalization = sum(abs2, phase_fourier_basis, dims=(1, 2))
+phase_fourier_basis ./= sqrt.(normalization)
+phase_fourier_basis = reshape(phase_fourier_basis, :, size(phase_fourier_basis, 3))
+
+b = fill(6, size(image, 1) * size(image, 2))
+
+y = vec(image)
+x0 = optimal_initialization(phase_fourier_basis, y, b)
+
+ψ, loss = poisson_phase_retrieval(phase_fourier_basis, x0, y, b, 500, Val(true))
+normalize!(ψ)
+
+
+fidelity(ψ, normalize(coefficients .* vec(sqrt.(normalization))))
+
+plot(loss[300:end])
+
+plot(image)
+plot(reshape(abs2.(phase_fourier_basis * (coefficients .* vec(sqrt.(normalization)))), size(image)))
+##
+##
+for order ∈ 3:4
     phase_fourier_fidelities, sigmas = h5open(joinpath(base_dir, "phases.h5")) do f_phases
         sigmas = read(f_phases["sigmas"])
         phases = read(f_phases["phases"])

@@ -193,7 +193,7 @@ NUM_SIGMAS = 5
 
 amplitude = np.pi
 sigmas = np.linspace(0.02, 0.04, NUM_SIGMAS)
-folder = "results/controled_exposure"
+folder = "results/fixed_basis_normalization"
 last_folder = os.path.basename(os.path.normpath(folder))
 
 if last_folder == "test":
@@ -223,8 +223,8 @@ _xs = np.arange(SIZE) - SIZE // 2
 _ys = np.arange(SIZE) - SIZE // 2
 xs, ys = np.meshgrid(_xs, _ys)
 
-exposures_no_phase = [200, 80]
-exposures_phase = np.linspace(80, 220, NUM_SIGMAS)
+exposures_no_phase = [100, 80]
+exposures_phase = np.linspace(80, 140, NUM_SIGMAS)
 
 print(f"Estimated Time: {(NUM_MODES * (1 + NUM_PHASES * NUM_SIGMAS) * 0.3 / 60)} min/main call")
 

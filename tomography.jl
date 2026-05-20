@@ -1,7 +1,7 @@
 ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
 ENV["JULIA_PYTHONCALL_EXE"] = "@venv"
 
-using PythonCall, QuantumMeasurements, CairoMakie, LinearAlgebra, ProgressMeter, Statistics, HDF5, FFTW, ProgressMeter
+using PythonCall, QuantumMeasurements, CairoMakie, LinearAlgebra, ProgressMeter, Statistics, HDF5, FFTW, ProgressMeter, LinearMaps
 
 scipy = pyimport("scipy")
 np = pyimport("numpy")
@@ -56,7 +56,7 @@ function fourier_transform(u)
     ifftshift(fft(fftshift(u, (1, 2)), (1, 2)), (1, 2))
 end
 
-base_dir = "results/controled_exposure/"
+base_dir = "results/fixed_basis_normalization/"
 
 A_direct, t_direct, A_fourier, t_fourier = h5open(joinpath(base_dir, "calibration/calibration.h5")) do f
     reverse(read(f["A_direct"]) |> transpose),
@@ -236,7 +236,7 @@ for order in 1:4
             diff(quantile(vec(x), [0.25, 0.75])) / 2
         end, dims=(1, 2))
 
-
+    mkpath(joinpath(base_dir, "plots"))
     with_theme(theme_latexfonts()) do
         fig = Figure()
         ax = Axis(fig[1, 1], xlabel="Fidelity", ylabel="Counts", title="Tomography for order up to $order")

@@ -141,7 +141,7 @@ def calibrate(_prepare, slm, camera, roi, xs, ys, centers, sigma, hologram_shape
     print("Translation t:", t)
     print(f"Residuals — mean: {residuals.mean():.3f} px, max: {residuals.max():.3f} px")
 
-    return A, t, images
+    return A, t, images, cam_points, slm_points
 
 def get_most_frequent(arr):
     vals, counts = np.unique(arr, return_counts=True)
@@ -192,10 +192,10 @@ def main(slm, camera_direct, camera_fourier, SIZE = 640, n = 6, XMAX = 40, FMAX 
     centers_fourier = np.array(list(itertools.product(fys, fxs)))
 
     print(10 * "-" + "Direct Calibration" + 10 * "-")
-    A_direct, t_direct, images_direct = calibrate(direct_prepare, slm, camera_direct, roi_direct, xs, ys, centers_direct, 15, (Ny, Nx), n)
+    A_direct, t_direct, images_direct, cam_points_direct, slm_points_direct = calibrate(direct_prepare, slm, camera_direct, roi_direct, xs, ys, centers_direct, 15, (Ny, Nx), n)
 
     print(10 * "-" + "Fourier Calibration" + 10 * "-")
-    A_fourier, t_fourier, images_fourier = calibrate(fourier_prepare, slm, camera_fourier, roi_fourier, xs, ys, centers_fourier, 50, (Ny, Nx), n)
+    A_fourier, t_fourier, images_fourier, cam_points_fourier, slm_points_fourier = calibrate(fourier_prepare, slm, camera_fourier, roi_fourier, xs, ys, centers_fourier, 50, (Ny, Nx), n)
 
     plt.clf()
     plt.imshow(np.mean(images_direct, axis=0))
@@ -205,14 +205,25 @@ def main(slm, camera_direct, camera_fourier, SIZE = 640, n = 6, XMAX = 40, FMAX 
     plt.imshow(np.mean(images_fourier, axis=0))
     plt.savefig("calibration/calibration_images_fourier.png")
 
+    hologram_for_bg = generate_amplitude_and_phase_hologram(np.ones((Ny, Nx)), np.zeros((Ny, Nx)), 
+                                                        192, 100, 100)
+    
+    slm.updateArray(hologram_for_bg)
+
     with h5py.File("calibration/calibration.h5", "w") as f:
         f["A_direct"] = A_direct
         f["t_direct"] = t_direct
+        f["cam_points_direct"] = cam_points_direct
+        f["slm_points_direct"] = slm_points_direct
         f["A_fourier"] = A_fourier
         f["t_fourier"] = t_fourier
+        f["cam_points_fourier"] = cam_points_fourier
+        f["slm_points_fourier"] = slm_points_fourier
         f["roi_direct"] = roi_direct
         f["roi_fourier"] = roi_fourier
         f["SIZE"] = SIZE
+        f["bg_direct"] = np.mean(np.array([camera_direct.capture(roi=roi_direct) for _ in range(10)]), axis=0).astype(np.uint8)
+        f["bg_fourier"] = np.mean(np.array([camera_fourier.capture(roi=roi_fourier) for _ in range(10)]), axis=0).astype(np.uint8)
 
 if __name__ == "__main__":
     slm = slmcontrol.SLMDisplay(host="localhost")
