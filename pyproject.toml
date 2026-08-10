@@ -5,22 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "cameras[imagingsource-new]",
     "h5py>=3.16.0",
     "ipykernel>=7.2.0",
     "jax[cuda13]>=0.10.0 ; sys_platform == 'linux'",
     "jax>=0.10.0 ; sys_platform != 'linux'",
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
-    "slmcontrol",
     "tqdm>=4.67.3",
+    "slmcontrol>=0.4.0",
+    "slm-camera-calibration",
 ]
-
-[tool.uv.sources]
-slmcontrol = { path = "../slmcontrol", editable = true }
-cameras = { git = "https://github.com/loquff/cameras.git" }
 
 [tool.uv.workspace]
 members = [
     "tomography_gpu",
 ]
+
+[tool.uv.sources]
+cameras = { git = "https://github.com/loquff/cameras.git" }
+slm-camera-calibration = { git = "https://github.com/marcsgil/slm-camera-calibration.git" }
