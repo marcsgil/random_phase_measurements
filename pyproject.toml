@@ -14,6 +14,9 @@ dependencies = [
     "tqdm>=4.67.3",
     "slmcontrol>=0.4.0",
     "slm-camera-calibration",
+    "cameras[imagingsource-new]",
+    "juliacall>=0.9.35",
+    "juliapkg>=0.1.26",
 ]
 
 [tool.uv.workspace]
@@ -22,5 +25,6 @@ members = [
 ]
 
 [tool.uv.sources]
-cameras = { git = "https://github.com/loquff/cameras.git" }
 slm-camera-calibration = { git = "https://github.com/marcsgil/slm-camera-calibration.git" }
+slmcontrol = { git = "https://github.com/marcsgil/slmcontrol" }
+cameras = { git = "https://github.com/loquff/cameras.git" }

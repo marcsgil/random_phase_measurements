@@ -1,10 +1,47 @@
+import jax.numpy as jnp
 import numpy as np
 from scipy.ndimage import affine_transform
 from slmcontrol import generate_hologram
 from numpy.linalg import qr
-import h5py
 
-def resize_and_center(img, target_shape, scale=1, order=1, cval=0):
+
+def crop_center(img, size):
+    """
+    Crop an image around its center to a square size.
+
+    Parameters
+    ----------
+    img : array-like
+        Input image to crop.
+    size : int
+        Size of the output square (height and width).
+
+    Returns
+    -------
+    array-like
+        Cropped image.
+    """
+    h, w = img.shape[-2], img.shape[-1]
+    start_h = (h - size) // 2
+    start_w = (w - size) // 2
+    return img[..., start_h : start_h + size, start_w : start_w + size]
+
+
+def set_phase_reference(data, posY=0.5, posX=0.5):
+    """
+    Set a phase reference by defining the center of the beam to have a phase of -pi
+    """
+    Nx = data.shape[-1]
+    Ny = data.shape[-2]
+    reference = data[..., int(Ny * posY), int(Nx * posX)]
+
+    # Compute the regularization term
+    angles = jnp.mod(data - reference[..., None, None], 2 * jnp.pi) - jnp.pi
+
+    return angles
+
+
+def resize_and_center(img, target_shape, scale, order=1, cval=0):
     """
     Resize an image by a scale factor and place it centered in a target shape,
     using a single affine transformation.
@@ -68,10 +105,10 @@ def resize_and_center(img, target_shape, scale=1, order=1, cval=0):
         return np.stack(channels, axis=0)
     
 def fourier_transform(mode):
-    return np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(mode), norm="ortho"))
+    return np.fft.fftshift(np.fft.fft2(np.fft.fftshift(mode)))
 
 def inverse_fourier_transform(mode):
-    return np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(mode), norm="ortho"))
+    return np.fft.fftshift(np.fft.ifft2(np.fft.fftshift(mode)))
 
 def linear_transformation(input, A, output_shape=None):
     if not output_shape:
@@ -83,7 +120,7 @@ def linear_transformation(input, A, output_shape=None):
     offset = input_center -  A @ output_center
 
     return affine_transform(input, A, offset, output_shape=output_shape)
-
+    
 def generate_amplitude_and_phase_hologram(mode, phase, two_pi_modulation, xperiod, yperiod, unitary=None, slm_shape=None):
     if slm_shape is not None:
         mode = resize_and_center(mode, slm_shape, 1)
@@ -145,38 +182,28 @@ def sample_haar_vectors(n_samples: int, dim: int):
 
     return result
 
-def set_phase_reference(data, posY=0.5, posX=0.5):
-    """
-    Set a phase reference by defining the center of the beam to have a phase of -pi
-    """
-    Nx = data.shape[-1]
-    Ny = data.shape[-2]
-    reference = data[..., int(Ny * posY), int(Nx * posX)]
+def mean_capture(camera, n, roi=None):
+    first_image = camera.capture(roi=roi)
+    buffer = np.empty((n, *first_image.shape), dtype=first_image.dtype)
+    buffer[0] = first_image
+    for i in range(1, n):
+        buffer[i] = camera.capture(roi=roi)
+    return np.mean(buffer, axis=0).astype(first_image.dtype)
 
-    # Compute the regularization term
-    angles = np.mod(data - reference[..., None, None], 2 * np.pi) - np.pi
+def optimize_exposure(camera, initial_exposure, min_exposure, max_exposure, alpha=1.05, ncycles=20, nmean=10, threshold=50, nbins=20, roi=None):
+    exposure = np.clip(initial_exposure, min_exposure, max_exposure)
 
-    return angles
+    for i in range(ncycles):
+        camera.set_exposure(exposure)
+        x = mean_capture(camera, nmean, roi=roi)
+        x = x[x>threshold]
+        counts, _ = np.histogram(x, bins=nbins, range=(threshold, 255))
 
-def extraction_linear_combination(modes, idx):
-    coefficients, basis = modes
-    Cs = coefficients[idx].reshape(-1, 1, 1)
-    return np.sum(Cs * basis, axis=0)
+        signal = 1 - counts[-1] / max(counts[-2], 1)
+
+        exposure = np.clip(exposure * (alpha ** signal), min_exposure, max_exposure)
+
+    return np.clip(exposure * 0.8, min_exposure, max_exposure)
 
 def remove_background(img, bg):
     return np.where(img > bg, img - bg, 0)
-
-def load_data(path, key, background=None, calibration_result=None, index=None):
-    with h5py.File(path) as f:
-        if index is None:
-            raw_image = np.asarray(f[key])
-        else:
-            raw_image = np.asarray(f[key][index]) #type: ignore
-
-        if background is not None:
-            raw_image = remove_background(raw_image, background)
-
-        if calibration_result is None:
-            return raw_image
-        else:
-            return affine_transform(raw_image, calibration_result.transform.matrix, calibration_result.transform.offset, output_shape=calibration_result.output_shape)

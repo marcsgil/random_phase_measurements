@@ -12,5 +12,5 @@ wheels/
 uv.lock
 
 plots
-calibration
+calibration_data
 results
