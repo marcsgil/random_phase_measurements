@@ -8,7 +8,7 @@ from pathlib import Path
 from slm_camera_calibration import CalibrationResult
 import matplotlib.pyplot as plt
 
-folder = "results/phase_direct_flip_1/up_to_order_1"
+folder = "results/test/up_to_order_1"
 parent_folder = Path(folder).parent
 
 with h5py.File(os.path.join(parent_folder, "phases.h5")) as f:
@@ -40,18 +40,20 @@ image_phase_fourier = load_data(f"{folder}/data.h5", "images_phase_fourier", bac
 
 mode_phase_fourier = extraction_linear_combination((coefficients, phase_fourier_basis), k)
 
-theo_image_phase_fourier = np.reshape(np.asarray(measurement_matrix) @ np.asarray(jl.vectorization(coefficients[k])), mode_phase_fourier.shape)
+theo_outcomes = np.asarray(measurement_matrix) @ np.asarray(jl.vectorization(coefficients[k]))
+theo_image_phase_fourier = np.reshape(theo_outcomes, mode_phase_fourier.shape)
 
 fig, axs = plt.subplots(1, 2)
 
 axs[0].imshow(resize_and_center(image_phase_fourier, (32, 32)))
 axs[1].imshow(resize_and_center(theo_image_phase_fourier, (32, 32)))
 
+os.makedirs("plots", exist_ok=True)
 plt.savefig("plots/temp.png")
 
-rho = jl.estimate_state(theo_image_phase_fourier, measurement_matrix, method)[0]
+rho = jl.estimate_state(theo_outcomes, measurement_matrix, method)[0]
 
 print(rho)
 print(coefficients[k])
 
-print(jl.fidelity(rho, np.conj(coefficients[k])))
+print(jl.fidelity(rho, coefficients[k]))

@@ -14,7 +14,7 @@ dependencies = [
     "tqdm>=4.67.3",
     "slmcontrol>=0.4.0",
     "slm-camera-calibration",
-    "cameras[imagingsource-new]",
+    "cameras[imagingsource-new]; sys_platform != 'darwin'",
     "juliacall>=0.9.35",
     "juliapkg>=0.1.26",
 ]
