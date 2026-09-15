@@ -36,7 +36,10 @@ measurement_matrix = jl.assemble_measurement_matrix([x for x in itr])
 k = 0
 
 image_phase_fourier = load_data(f"{folder}/data.h5", "images_phase_fourier", background=2, calibration_result=calib_res_fourier, index=(i, j, k))
-
+experimental_outcomes = np.asarray(
+      image_phase_fourier,
+      dtype=np.float64,
+  ).ravel(order="C")
 
 mode_phase_fourier = extraction_linear_combination((coefficients, phase_fourier_basis), k)
 
@@ -51,7 +54,7 @@ axs[1].imshow(resize_and_center(theo_image_phase_fourier, (32, 32)))
 os.makedirs("plots", exist_ok=True)
 plt.savefig("plots/temp.png")
 
-rho = jl.estimate_state(theo_outcomes, measurement_matrix, method)[0]
+rho = jl.estimate_state(experimental_outcomes, measurement_matrix, method)[0]
 
 print(rho)
 print(coefficients[k])
