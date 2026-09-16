@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import h5py
 import os
 import numpy as np
-from utils import fourier_transform, resize_and_center, extraction_linear_combination
+from common.utils import fourier_transform, resize_and_center, extraction_linear_combination
 from scipy.ndimage import affine_transform
 from slm_camera_calibration import CalibrationResult
 from pathlib import Path
-from utils import remove_background
+from common.utils import remove_background
 
 
 def main(folder, NUM_SAMPLES, extraction = extraction_linear_combination):

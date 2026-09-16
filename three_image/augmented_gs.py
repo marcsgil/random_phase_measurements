@@ -2,9 +2,9 @@ import jax
 import jax.numpy as jnp
 from jax.lax import scan
 import matplotlib.pyplot as plt
-from utils import set_phase_reference
+from common.utils import set_phase_reference
 import slmcontrol
-from phase_screens import fourier_phase_screen
+from acquisition.phase_screens import fourier_phase_screen
 
 
 def fidelity(u1, u2):

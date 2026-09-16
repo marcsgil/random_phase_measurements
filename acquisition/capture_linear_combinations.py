@@ -1,17 +1,17 @@
 import slmcontrol
-from utils import sample_haar_vectors, generate_amplitude_and_phase_hologram, extraction_linear_combination, linear_transformation
+from common.utils import sample_haar_vectors, generate_amplitude_and_phase_hologram, extraction_linear_combination, linear_transformation
 import h5py
 import numpy as np
 from cameras.ImagingSourceNew import ImagingSourceCamera
 from cameras.Ximea import XimeaCamera
-from phase_screens import fourier_phase_screen
+from acquisition.phase_screens import fourier_phase_screen
 from functools import partial
 import itertools
 import os
 import shutil
-import calibration
+from acquisition import calibration
 from slm_camera_calibration import CalibrationResult
-import diagnose_linear_combinations
+from analysis import diagnose_linear_combinations
 from scipy.linalg import polar, inv
 
 

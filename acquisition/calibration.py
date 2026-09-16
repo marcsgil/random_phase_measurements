@@ -2,7 +2,7 @@ import numpy as np
 from slm_camera_calibration import calibrate
 from cameras.Ximea import XimeaCamera
 from cameras.ImagingSourceNew import ImagingSourceCamera
-from utils import generate_amplitude_and_phase_hologram, resize_and_center, fourier_transform, inverse_fourier_transform
+from common.utils import generate_amplitude_and_phase_hologram, resize_and_center, fourier_transform, inverse_fourier_transform
 import slmcontrol
 import matplotlib.pyplot as plt
 from scipy.ndimage import affine_transform

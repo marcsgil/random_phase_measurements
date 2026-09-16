@@ -1,9 +1,9 @@
-from augmented_gs import augmented_gs, fidelity
+from three_image.augmented_gs import augmented_gs, fidelity
 import matplotlib.pyplot as plt
 import h5py
 from os.path import join
 from scipy.ndimage import affine_transform
-from utils import crop_center, fourier_transform, remove_background, set_phase_reference
+from common.utils import crop_center, fourier_transform, remove_background, set_phase_reference
 import jax.numpy as jnp
 import jax
 import tqdm
