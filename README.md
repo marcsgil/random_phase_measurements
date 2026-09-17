@@ -14,6 +14,13 @@ Run Python modules from the repository root, for example:
 
 ```bash
 cp config_example.toml config.toml
+python -m acquisition.run results/run_001
+```
+
+The one-shot command requires a destination that does not already exist. To
+run individual stages instead:
+
+```bash
 python -m acquisition.calibration results/test
 python -m acquisition.capture_background results/test
 python -m acquisition.generate_phase_masks results/test
