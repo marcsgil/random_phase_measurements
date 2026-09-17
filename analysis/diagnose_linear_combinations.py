@@ -34,7 +34,6 @@ def main(folder, num_samples, extraction=extraction_linear_combination):
     num_sigmas, num_phases = phases.shape[:2]
 
     with h5py.File(folder / "data.h5") as file:
-        direct_shape = file["images_direct"].shape[-2:]
         fourier_shape = file["images_fourier"].shape[-2:]
 
         for index in range(min(num_samples, num_modes)):
@@ -43,10 +42,15 @@ def main(folder, num_samples, extraction=extraction_linear_combination):
             mode_fourier = fourier_transform(mode)
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
 
-            image_direct = remove_background(file["images_direct"][index], 5)
+            image_direct = affine_transform(
+                remove_background(file["images_direct"][index], 5),
+                calibration_direct.transform.matrix,
+                calibration_direct.transform.offset,
+                output_shape=calibration_direct.output_shape,
+            )
             image_fourier = remove_background(file["images_fourier"][index], 5)
             image_phase_fourier = remove_background(file["images_phase_fourier"][0, 0, index], 5)
-            theory_direct = np.abs(camera_grid(mode, calibration_direct, direct_shape)) ** 2
+            theory_direct = np.abs(mode) ** 2
             theory_fourier = np.abs(camera_grid(mode_fourier, calibration_fourier, fourier_shape)) ** 2
             theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
 
