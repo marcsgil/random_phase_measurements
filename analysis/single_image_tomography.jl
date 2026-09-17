@@ -8,7 +8,7 @@ result_directory = "results/test"
 order_directory = joinpath(result_directory, "up_to_order_1")
 sigma_index = 1
 phase_index = 4
-background = 5
+background = 6
 
 function fourier_transform(u)
     dims = (1, 2)

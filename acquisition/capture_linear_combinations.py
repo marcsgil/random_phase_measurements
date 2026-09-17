@@ -161,13 +161,14 @@ def main(result_directory, config_path):
     camera_fourier = XimeaCamera()
 
     fourier_camera = config["fourier_camera"]
-    camera_fourier.camera.enable_aeag()
-    camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"] // 2)
-    camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"] // 2)
-    camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"] + fourier_camera["width"] // 4)
-    camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"] + fourier_camera["height"] // 4)
-    camera_fourier.camera.set_exp_priority(fourier_camera["exposure_priority"])
-    camera_fourier.camera.set_aeag_level(fourier_camera["aeag_level"])
+    camera_fourier.set_exposure(fourier_camera["exposure"])
+    # camera_fourier.camera.enable_aeag()
+    # camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"] // 2)
+    # camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"] // 2)
+    # camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"] + fourier_camera["width"] // 4)
+    # camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"] + fourier_camera["height"] // 4)
+    # camera_fourier.camera.set_exp_priority(fourier_camera["exposure_priority"])
+    # camera_fourier.camera.set_aeag_level(fourier_camera["aeag_level"])
 
     try:
         for order_directory in prepared_orders:
