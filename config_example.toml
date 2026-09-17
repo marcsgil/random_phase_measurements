@@ -3,12 +3,12 @@ size = 256
 
 [phases]
 num_samples = 4
-sigmas = [0.02, 0.04]
+sigmas = [0.02, 0.03, 0.04, 0.05]
 amplitude = 3.141592653589793
 seed = 42
 
 [modes]
-orders = [1, 2, 3, 4, 5]
+orders = [1]
 num_combinations = 8
 waist = 30
 seed = 43
@@ -25,14 +25,15 @@ yperiod = 19
 exposure = 100
 
 [fourier_camera]
-offset_x = 372
-offset_y = 484
+offset_x = 480
+offset_y = 338
 width = 384
 height = 384
 exposure_priority = 1.0
-aeag_level = 14
+aeag_level = 10
+exposure = 30
 
 [capture]
 settling_time_s = 0.3
-aeag_settling_captures = 5
+aeag_settling_captures = 4
 diagnostic_samples = 8
