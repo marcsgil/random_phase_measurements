@@ -1,111 +1,106 @@
-import matplotlib.pyplot as plt
+from pathlib import Path
+
 import h5py
-import os
+import matplotlib.pyplot as plt
 import numpy as np
-from common.utils import fourier_transform, resize_and_center, extraction_linear_combination
 from scipy.ndimage import affine_transform
 from slm_camera_calibration import CalibrationResult
-from pathlib import Path
-from common.utils import remove_background
+
+from common.utils import extraction_linear_combination, fourier_transform, remove_background
 
 
-def main(folder, NUM_SAMPLES, extraction = extraction_linear_combination):
-    parent_folder = Path(folder).parent
-    calib_res_direct = CalibrationResult.load(os.path.join(parent_folder, "calibration_data", "calibration_direct.h5"))
-    calib_res_fourier = CalibrationResult.load(os.path.join(parent_folder, "calibration_data", "calibration_fourier.h5"))
+def camera_grid(field, calibration_result, camera_shape):
+    matrix = calibration_result.transform.matrix
+    inverse_matrix = np.linalg.inv(matrix)
+    inverse_offset = -inverse_matrix @ calibration_result.transform.offset
+    return affine_transform(field, inverse_matrix, inverse_offset, output_shape=camera_shape)
 
-    with h5py.File(os.path.join(folder, "modes.h5")) as f:
-        coefficients = np.asarray(f["coefficients"])
-        basis = np.asarray(f["basis"])
-        modes = (coefficients, basis)
 
-    NUM_MODES = coefficients.shape[0]
+def main(folder, num_samples, extraction=extraction_linear_combination):
+    folder = Path(folder)
+    result_directory = folder.parent
+    calibration_direct = CalibrationResult.load(result_directory / "calibration_data" / "calibration_direct.h5")
+    calibration_fourier = CalibrationResult.load(result_directory / "calibration_data" / "calibration_fourier.h5")
 
-    with h5py.File(os.path.join(parent_folder, "phases.h5")) as f:
-        phases = np.asarray(f["phases"])
+    with h5py.File(folder / "modes.h5") as file:
+        coefficients = np.asarray(file["coefficients"])
+        basis = np.asarray(file["basis"])
+    modes = (coefficients, basis)
 
-    NUM_SIGMAS, NUM_PHASES = phases.shape[:2]
+    with h5py.File(result_directory / "phases.h5") as file:
+        phases = np.asarray(file["phases"])
 
-    with h5py.File(os.path.join(folder, "data.h5")) as f:
-        # Fix phase and sigma
-        for n in range(min(NUM_SAMPLES, NUM_MODES)):
-            mode = extraction(modes, n)
+    num_modes = coefficients.shape[0]
+    num_sigmas, num_phases = phases.shape[:2]
+
+    with h5py.File(folder / "data.h5") as file:
+        direct_shape = file["images_direct"].shape[-2:]
+        fourier_shape = file["images_fourier"].shape[-2:]
+
+        for index in range(min(num_samples, num_modes)):
+            mode = extraction(modes, index)
             phase = phases[0, 0]
             mode_fourier = fourier_transform(mode)
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
 
-            image_direct = affine_transform(remove_background(f["images_direct"][n], 5), calib_res_direct.transform.matrix, calib_res_direct.transform.offset, output_shape=calib_res_direct.output_shape)
-            image_fourier = affine_transform(remove_background(f["images_fourier"][n], 5), calib_res_fourier.transform.matrix, calib_res_fourier.transform.offset, output_shape=calib_res_fourier.output_shape)
-            image_phase_fourier = affine_transform(remove_background(f["images_phase_fourier"][0, 0, n], 5), calib_res_fourier.transform.matrix, calib_res_fourier.transform.offset, output_shape=calib_res_fourier.output_shape)
+            image_direct = remove_background(file["images_direct"][index], 5)
+            image_fourier = remove_background(file["images_fourier"][index], 5)
+            image_phase_fourier = remove_background(file["images_phase_fourier"][0, 0, index], 5)
+            theory_direct = np.abs(camera_grid(mode, calibration_direct, direct_shape)) ** 2
+            theory_fourier = np.abs(camera_grid(mode_fourier, calibration_fourier, fourier_shape)) ** 2
+            theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
 
-
-            fig, axs = plt.subplots(2, 3, figsize=(10, 8))
-            axs[0, 0].imshow(image_direct, cmap="hot", vmin=0, vmax=255)
-            axs[0, 0].set_title("Direct (Experiment)")
-
-            axs[0, 1].imshow(resize_and_center(image_fourier,(32, 32), 1), cmap="hot", vmin=0, vmax=255)
-            axs[0, 1].set_title("Fourier (Experiment)")
-
-            axs[0, 2].imshow(resize_and_center(image_phase_fourier,(32, 32), 1), cmap="hot", vmin=0, vmax=255)
-            axs[0, 2].set_title("Phase Fourier (Experiment)")
-
-            axs[1, 0].imshow(np.abs(mode)**2, cmap="hot")
-            axs[1, 0].set_title("Direct (Theory)")
-
-            axs[1, 1].imshow(resize_and_center(np.abs(mode_fourier)**2,(32, 32), 1), cmap="hot")
-            axs[1, 1].set_title("Fourier (Theory)")
-
-            axs[1, 2].imshow(resize_and_center(np.abs(mode_phase_fourier)**2,(32, 32), 1), cmap="hot")
-            axs[1, 2].set_title("Phase Fourier (Theory)")
-
-            plt.savefig(os.path.join(folder, f"mode_{n}.png"))
+            figure, axes = plt.subplots(2, 3, figsize=(10, 8))
+            axes[0, 0].imshow(image_direct, cmap="hot", vmin=0, vmax=255)
+            axes[0, 0].set_title("Direct (Experiment)")
+            axes[0, 1].imshow(image_fourier, cmap="hot", vmin=0, vmax=255)
+            axes[0, 1].set_title("Fourier (Experiment)")
+            axes[0, 2].imshow(image_phase_fourier, cmap="hot", vmin=0, vmax=255)
+            axes[0, 2].set_title("Phase Fourier (Experiment)")
+            axes[1, 0].imshow(theory_direct, cmap="hot")
+            axes[1, 0].set_title("Direct (Theory)")
+            axes[1, 1].imshow(theory_fourier, cmap="hot")
+            axes[1, 1].set_title("Fourier (Theory)")
+            axes[1, 2].imshow(theory_phase_fourier, cmap="hot")
+            axes[1, 2].set_title("Phase Fourier (Theory)")
+            plt.savefig(folder / f"mode_{index}.png")
             plt.close()
 
-        # Fix Mode and phase
-        for n in range(min(NUM_SAMPLES, NUM_SIGMAS)):
+        for index in range(min(num_samples, num_sigmas)):
             mode = extraction(modes, 0)
-            phase = phases[n, 0]
+            phase = phases[index, 0]
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
-            image_phase_fourier = affine_transform(remove_background(f["images_phase_fourier"][n, 0, 0], 5), calib_res_fourier.transform.matrix, calib_res_fourier.transform.offset, output_shape=calib_res_fourier.output_shape)
+            image_phase_fourier = remove_background(file["images_phase_fourier"][index, 0, 0], 5)
+            theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
 
-            fig, axs = plt.subplots(1, 3, figsize=(10, 4))
-
-            axs[0].imshow(resize_and_center(image_phase_fourier, (32, 32), 1), cmap="hot", vmin=0, vmax=255)
-            axs[0].set_title("Phase Fourier (Experiment)")
-
-            axs[1].imshow(np.abs(resize_and_center(mode_phase_fourier,(32, 32), 1))**2, cmap="hot")
-            axs[1].set_title("Phase Fourier (Theory)")
-            
-            axs[2].imshow(phase, cmap="twilight")
-            axs[2].set_title("Transformation Phase")
-
-            plt.savefig(os.path.join(folder, f"sigma_{n}.png"))
+            figure, axes = plt.subplots(1, 3, figsize=(10, 4))
+            axes[0].imshow(image_phase_fourier, cmap="hot", vmin=0, vmax=255)
+            axes[0].set_title("Phase Fourier (Experiment)")
+            axes[1].imshow(theory_phase_fourier, cmap="hot")
+            axes[1].set_title("Phase Fourier (Theory)")
+            axes[2].imshow(phase, cmap="twilight")
+            axes[2].set_title("Transformation Phase")
+            plt.savefig(folder / f"sigma_{index}.png")
             plt.close()
 
-        # Fix mode and sigma
-        for n in range(min(NUM_SAMPLES, NUM_PHASES)):
+        for index in range(min(num_samples, num_phases)):
             mode = extraction(modes, 0)
-            phase = phases[0, n]
+            phase = phases[0, index]
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
-            image_phase_fourier = affine_transform(remove_background(f["images_phase_fourier"][0, n, 0], 5), calib_res_fourier.transform.matrix, calib_res_fourier.transform.offset, output_shape=calib_res_fourier.output_shape)
+            image_phase_fourier = remove_background(file["images_phase_fourier"][0, index, 0], 5)
+            theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
 
-            fig, axs = plt.subplots(1, 3, figsize=(10, 4))
-
-            axs[0].imshow(resize_and_center(image_phase_fourier, (32, 32), 1), cmap="hot", vmin=0, vmax=255)
-            axs[0].set_title("Phase Fourier (Experiment)")
-
-            axs[1].imshow(resize_and_center(np.abs(mode_phase_fourier)**2, (32, 32), 1), cmap="hot")
-            axs[1].set_title("Phase Fourier (Theory)")
-            
-            axs[2].imshow(phase, cmap="twilight")
-            axs[2].set_title("Transformation Phase")
-
-            plt.savefig(os.path.join(folder, f"phase_{n}.png"))
+            figure, axes = plt.subplots(1, 3, figsize=(10, 4))
+            axes[0].imshow(image_phase_fourier, cmap="hot", vmin=0, vmax=255)
+            axes[0].set_title("Phase Fourier (Experiment)")
+            axes[1].imshow(theory_phase_fourier, cmap="hot")
+            axes[1].set_title("Phase Fourier (Theory)")
+            axes[2].imshow(phase, cmap="twilight")
+            axes[2].set_title("Transformation Phase")
+            plt.savefig(folder / f"phase_{index}.png")
             plt.close()
+
 
 if __name__ == "__main__":
-    for n in range(1, 6):
-        folder = f"results/test/up_to_order_{n}"
-        NUM_SAMPLES = 4
-    
-        main(folder, NUM_SAMPLES)
+    for order in range(1, 6):
+        main(f"results/test/up_to_order_{order}", 4)

@@ -8,14 +8,22 @@ from scipy.ndimage import affine_transform
 import h5py
 from pathlib import Path
 
-from acquisition.config import fourier_roi, load_config
+from acquisition.config import fourier_roi, load_config, snapshot_config
 
 
-def main(config_path=Path("config.toml")):
+def main(result_directory, config_path=Path("config.toml")):
     from cameras.Ximea import XimeaCamera
     from cameras.ImagingSourceNew import ImagingSourceCamera
 
+    result_directory = Path(result_directory)
+    result_directory.mkdir(parents=True, exist_ok=True)
+    calibration_directory = result_directory / "calibration_data"
+    calibration_directory.mkdir(exist_ok=True)
+    plots_directory = calibration_directory / "plots"
+    plots_directory.mkdir(exist_ok=True)
+
     config = load_config(config_path)
+    snapshot_config(config_path, result_directory)
     shifts1d_direct = np.arange(-40, 60, 20, dtype=int)
     shifts_direct = np.array([[y, x] for y in shifts1d_direct for x in shifts1d_direct])
 
@@ -76,7 +84,7 @@ def main(config_path=Path("config.toml")):
         settle_time=config["capture"]["settling_time_s"],
     )
 
-    result_direct.save("calibration_data/calibration_direct.h5")
+    result_direct.save(calibration_directory / "calibration_direct.h5")
 
     base_mode_fourier = slmcontrol.hg(xs, ys, w=2)
 
@@ -91,8 +99,9 @@ def main(config_path=Path("config.toml")):
         settle_time=config["capture"]["settling_time_s"],
     )
 
-    result_fourier.save("calibration_data/calibration_fourier.h5")
-    with h5py.File("calibration_data/calibration_fourier.h5", "a") as f:
+    fourier_calibration_path = calibration_directory / "calibration_fourier.h5"
+    result_fourier.save(fourier_calibration_path)
+    with h5py.File(fourier_calibration_path, "a") as f:
         f["roi"] = roi_fourier
 
     mode = slmcontrol.diagonal_hg(xs, ys, m=5, w=20)
@@ -123,12 +132,12 @@ def main(config_path=Path("config.toml")):
     fig, axs = plt.subplots(1, 2)
     axs[0].imshow(transformed_image_direct)
     axs[1].imshow(np.abs(mode) ** 2)
-    plt.savefig("plots/calibration_direct.png")
+    plt.savefig(plots_directory / "calibration_direct.png")
 
     fig, axs = plt.subplots(1, 2)
     axs[0].imshow(transformed_image_fourier[3*N//8:-3*N//8,3*N//8:-3*N//8])
     axs[1].imshow(np.abs(fourier_transform(mode))[3*N//8:-3*N//8,3*N//8:-3*N//8] ** 2)
-    plt.savefig("plots/calibration_fourier.png")
+    plt.savefig(plots_directory / "calibration_fourier.png")
 
     slm.close()
     camera_direct.close()
@@ -136,5 +145,7 @@ def main(config_path=Path("config.toml")):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calibrate the direct and Fourier camera images.")
+    parser.add_argument("result_directory", type=Path)
     parser.add_argument("--config", type=Path, default=Path("config.toml"))
-    main(parser.parse_args().config)
+    arguments = parser.parse_args()
+    main(arguments.result_directory, arguments.config)

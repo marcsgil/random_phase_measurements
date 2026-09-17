@@ -14,7 +14,7 @@ Run Python modules from the repository root, for example:
 
 ```bash
 cp config_example.toml config.toml
-python -m acquisition.calibration
+python -m acquisition.calibration results/test
 python -m acquisition.capture_background results/test
 python -m acquisition.generate_phase_masks results/test
 python -m acquisition.generate_modes results/test
@@ -22,9 +22,8 @@ python -m preprocessing.match_phase_fourier_basis_to_experiment results/test
 python -m acquisition.capture_linear_combinations results/test
 ```
 
-Copy the resulting `calibration_data/` into `results/test/calibration_data/`
-before capturing. Each preparation and capture snapshots the active
-`config.toml` into the result directory.
+Each preparation, calibration, and capture snapshots the active `config.toml`
+into the result directory.
 
 The current Julia analysis entry point is:
 
