@@ -16,7 +16,7 @@ def camera_grid(field, calibration_result, camera_shape):
     return affine_transform(field, inverse_matrix, inverse_offset, output_shape=camera_shape)
 
 
-def main(folder, num_samples, extraction=extraction_linear_combination):
+def main(folder, num_samples=4, extraction=extraction_linear_combination):
     folder = Path(folder)
     result_directory = folder.parent
     calibration_direct = CalibrationResult.load(result_directory / "calibration_data" / "calibration_direct.h5")
