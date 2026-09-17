@@ -7,8 +7,8 @@ using QuantumMeasurements
 result_directory = "results/test"
 order_directory = joinpath(result_directory, "up_to_order_1")
 sigma_index = 1
-phase_index = 2
-background = 10
+phase_index = 4
+background = 3
 
 function fourier_transform(u)
     dims = (1, 2)
@@ -34,7 +34,7 @@ end
 
 images = h5open(joinpath(order_directory, "data.h5"), "r") do file
     read(file["images_phase_fourier"])
-end
+end;
 
 basis ./= sqrt.(sum(abs2, basis, dims=(1, 2)))
 phase_factor = phase_factors[:, :, phase_index, sigma_index]

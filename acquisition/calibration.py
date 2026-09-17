@@ -21,14 +21,18 @@ def main():
     shifts_fourier = np.array([[y, x] for y in shifts1d_fourier for x in shifts1d_fourier])
 
     camera_fourier = XimeaCamera()
-    roi_fourier = (512, 896, 448, 832)
+    width = 384
+    height = 384
+    offset_x = 372
+    offset_y = 484
     camera_fourier.camera.enable_aeag()
-    camera_fourier.camera.set_aeag_roi_width(roi_fourier[3] - roi_fourier[2])
-    camera_fourier.camera.set_aeag_roi_height(roi_fourier[1] - roi_fourier[0])
-    camera_fourier.camera.set_aeag_roi_offset_x(roi_fourier[2])
-    camera_fourier.camera.set_aeag_roi_offset_y(roi_fourier[0])
+    camera_fourier.camera.set_aeag_roi_width(width)
+    camera_fourier.camera.set_aeag_roi_height(height)
+    camera_fourier.camera.set_aeag_roi_offset_x(offset_x)
+    camera_fourier.camera.set_aeag_roi_offset_y(offset_y)
     camera_fourier.camera.set_exp_priority(1.0)
-    camera_fourier.camera.set_aeag_level(5)
+    camera_fourier.camera.set_aeag_level(4)
+    roi_fourier = (offset_y, offset_y + height, offset_x, offset_x + width)
     images_fourier = np.empty((len(shifts_fourier), *camera_fourier.capture(roi=roi_fourier).shape), dtype=np.uint8)
 
     slm = slmcontrol.SLMDisplay(host="localhost")
