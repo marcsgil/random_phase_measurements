@@ -3,7 +3,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-
+import slmcontrol
 from acquisition.config import fourier_roi, load_config, snapshot_config
 
 
@@ -29,6 +29,11 @@ def main(result_directory, config_path, num_frames=1000):
     camera_direct.set_exposure(config["direct_camera"]["exposure"])
     camera_fourier = XimeaCamera()
     camera_fourier.set_exposure(config["fourier_camera"]["exposure"])
+
+    slm = slmcontrol.SLMDisplay(host=config["slm"]["host"])
+    holo = np.zeros((slm.height, slm.width), dtype=np.uint8)
+    slm.updateArray(holo)
+    slm.close()
 
     try:
         print(f"Capture {num_frames} background frames with the optical input blocked.")

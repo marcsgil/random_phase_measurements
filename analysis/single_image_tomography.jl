@@ -6,21 +6,28 @@ using QuantumMeasurements
 
 result_directory = "results/test"
 order_directory = joinpath(result_directory, "up_to_order_1")
-sigma_index = 1
-phase_index = 4
-background = 6
+sigma_index = 4
+phase_index = 2
+
+background_direct, background_fourier = h5open(
+    joinpath(result_directory, "background.h5"), "r"
+) do file
+    read(file["images_direct"]),
+    read(file["images_fourier"])
+end
 
 function fourier_transform(u)
     dims = (1, 2)
     fftshift(fft(ifftshift(u, dims), dims), dims) / sqrt(size(u, 1) * size(u, 2))
 end
 
-remove_background(image, background) = max.(image .- background, zero(eltype(image)))
+remove_background(image, background) = image > background + 1 ? image - background - 1 : zero(image-background)
+zero2nan(image) = image > 0 ? image : NaN
 
 function center_crop(image, crop_size)
     row = (size(image, 1) - crop_size) ÷ 2 + 1
     column = (size(image, 2) - crop_size) ÷ 2 + 1
-    @view image[row:row+crop_size-1, column:column+crop_size-1]
+    @view image[row:(row+crop_size-1), column:(column+crop_size-1)]
 end
 
 coefficients = h5open(joinpath(order_directory, "modes.h5"), "r") do file
@@ -36,6 +43,7 @@ images = h5open(joinpath(order_directory, "data.h5"), "r") do file
     read(file["images_phase_fourier"])
 end;
 
+
 basis ./= sqrt.(sum(abs2, basis, dims=(1, 2)))
 phase_factor = phase_factors[:, :, phase_index, sigma_index]
 phase_fourier_basis = fourier_transform(basis .* phase_factor)
@@ -48,9 +56,9 @@ mkpath("plots")
 
 for mode_index in axes(coefficients, 2)
     coefficient = coefficients[:, mode_index]
-    image = remove_background(
+    image = remove_background.(
         images[:, :, mode_index, phase_index, sigma_index],
-        background,
+        background_fourier,
     )
 
     theoretical_outcomes = get_probabilities(
@@ -59,12 +67,24 @@ for mode_index in axes(coefficients, 2)
     )
     theoretical_image = reshape(theoretical_outcomes, size(image))
 
-    figure = Figure(size=(800, 400))
-    heatmap!(Axis(figure[1, 1]), image)
-    heatmap!(Axis(figure[1, 2]), theoretical_image)
-    save("plots/temp_$mode_index.png", figure)
 
     rho = estimate_state(vec(image), measurement_matrix, method)[1]
     psi = project2pure(rho)
-    println(fidelity(psi, coefficient))
+
+    predicted_image = reshape(get_probabilities(measurement_matrix, traceless_vectorization(psi)), size(image))
+
+    plot_images = (theoretical_image, zero2nan.(image), predicted_image)
+    fig_titles = ("Theory", "Experiment", "Prediction")
+
+    with_theme(theme_latexfonts()) do 
+        figure = Figure(size=(1000, 400))
+
+        for n ∈ 1:3
+            ax = Axis(figure[1, n], title=fig_titles[n], aspect=1)
+            heatmap!(ax, plot_images[n])
+            hidedecorations!(ax)
+        end
+        Label(figure[0, :], "Fidelity: $(round(Int, 100*fidelity(psi, coefficient))) %", fontsize = 16, font = :bold)
+        save("plots/temp_$mode_index.png", figure)
+    end
 end
