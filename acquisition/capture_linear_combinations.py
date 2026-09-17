@@ -17,6 +17,13 @@ from common.utils import (
     linear_transformation,
 )
 
+def mean_capture(camera, samples, *args, **kwargs):
+    sample_image = camera.capture(*args,  **kwargs) 
+    mean_image = sample_image / samples
+    for _ in range(samples-1):
+        mean_image += camera.capture(*args,  **kwargs) / samples
+    return np.floor(mean_image).astype(sample_image.dtype)
+
 
 def _prepare_no_phase(mode, slm_shape, extraction, hologram_config, n):
     mode = extraction(mode, n)
@@ -32,18 +39,13 @@ def _prepare_phase(mode, phases, indices, slm_shape, extraction, unitary, hologr
 
 
 def _measure_no_phase(images_direct, images_fourier, camera_direct, camera_fourier, roi_fourier, aeag_settling_captures, n):
-    for _ in range(aeag_settling_captures):
-        camera_fourier.capture(roi=roi_fourier)
-
-    images_direct[n] = camera_direct.capture()
-    images_fourier[n] = camera_fourier.capture(roi=roi_fourier)
+    images_direct[n] = mean_capture(camera_direct, aeag_settling_captures)
+    images_fourier[n] = mean_capture(camera_fourier, aeag_settling_captures, roi=roi_fourier)
 
 
 def _measure_phase(images_phase_fourier, camera_fourier, indices, roi_fourier, aeag_settling_captures, n):
     sigma_idx, phase_idx, coeff_idx = indices[n]
-    for _ in range(aeag_settling_captures):
-        camera_fourier.capture(roi=roi_fourier)
-    images_phase_fourier[sigma_idx, phase_idx, coeff_idx] = camera_fourier.capture(roi=roi_fourier)
+    images_phase_fourier[sigma_idx, phase_idx, coeff_idx] = mean_capture(camera_fourier, aeag_settling_captures, roi=roi_fourier)
 
 
 def capture_order(
