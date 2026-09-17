@@ -4,7 +4,7 @@ from jax.lax import scan
 import matplotlib.pyplot as plt
 from common.utils import set_phase_reference
 import slmcontrol
-from acquisition.phase_screens import fourier_phase_screen
+from acquisition.generate_phase_masks import fourier_phase_screen
 
 
 def fidelity(u1, u2):
