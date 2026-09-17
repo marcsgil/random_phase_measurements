@@ -162,10 +162,10 @@ def main(result_directory, config_path):
 
     fourier_camera = config["fourier_camera"]
     camera_fourier.camera.enable_aeag()
-    camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"])
-    camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"])
-    camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"])
-    camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"])
+    camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"] // 2)
+    camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"] // 2)
+    camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"] + fourier_camera["width"] // 4)
+    camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"] + fourier_camera["height"] // 4)
     camera_fourier.camera.set_exp_priority(fourier_camera["exposure_priority"])
     camera_fourier.camera.set_aeag_level(fourier_camera["aeag_level"])
 

@@ -8,7 +8,7 @@ result_directory = "results/test"
 order_directory = joinpath(result_directory, "up_to_order_1")
 sigma_index = 1
 phase_index = 4
-background = 3
+background = 5
 
 function fourier_transform(u)
     dims = (1, 2)
@@ -46,7 +46,7 @@ method = MaximumLikelihood()
 
 mkpath("plots")
 
-Threads.@threads for mode_index in axes(coefficients, 2)
+for mode_index in axes(coefficients, 2)
     coefficient = coefficients[:, mode_index]
     image = remove_background(
         images[:, :, mode_index, phase_index, sigma_index],
