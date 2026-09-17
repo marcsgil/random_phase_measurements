@@ -14,3 +14,4 @@ uv.lock
 plots
 calibration_data
 results
+config.toml

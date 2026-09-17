@@ -1,164 +1,204 @@
-import slmcontrol
-from common.utils import sample_haar_vectors, generate_amplitude_and_phase_hologram, extraction_linear_combination, linear_transformation
+import argparse
+import itertools
+from functools import partial
+from pathlib import Path
+
 import h5py
 import numpy as np
-from cameras.ImagingSourceNew import ImagingSourceCamera
-from cameras.Ximea import XimeaCamera
-from acquisition.phase_screens import fourier_phase_screen
-from functools import partial
-import itertools
-import os
-import shutil
-from acquisition import calibration
+import slmcontrol
+from scipy.linalg import polar
 from slm_camera_calibration import CalibrationResult
+
 from analysis import diagnose_linear_combinations
-from scipy.linalg import polar, inv
+from acquisition.config import fourier_roi, load_config, snapshot_config
+from common.utils import (
+    extraction_linear_combination,
+    generate_amplitude_and_phase_hologram,
+    linear_transformation,
+)
 
 
-def _prepare_no_phase(mode, slm_shape, extraction, n):
+def _prepare_no_phase(mode, slm_shape, extraction, hologram_config, n):
     mode = extraction(mode, n)
     phase = np.zeros_like(mode)
-    return generate_amplitude_and_phase_hologram(mode, phase, 192, -3, 19, slm_shape=slm_shape)
+    return generate_amplitude_and_phase_hologram(mode, phase, slm_shape=slm_shape, **hologram_config)
 
-def _prepare_phase(mode, phases, indices, slm_shape, extraction, unitary, n):
+
+def _prepare_phase(mode, phases, indices, slm_shape, extraction, unitary, hologram_config, n):
     sigma_idx, phase_idx, coeff_idx = indices[n]
     mode = extraction(mode, coeff_idx)
     phase = linear_transformation(np.flip(phases[sigma_idx, phase_idx], axis=1), unitary)
-    return generate_amplitude_and_phase_hologram(mode, phase, 192, -3, 19, slm_shape=slm_shape)
+    return generate_amplitude_and_phase_hologram(mode, phase, slm_shape=slm_shape, **hologram_config)
 
-def _measure_no_phase(images_direct, images_fourier, camera_direct, camera_fourier, roi_fourier, n):
-    for _ in range(5):
-        # For autoexposure to settle
+
+def _measure_no_phase(images_direct, images_fourier, camera_direct, camera_fourier, roi_fourier, aeag_settling_captures, n):
+    for _ in range(aeag_settling_captures):
         camera_fourier.capture(roi=roi_fourier)
 
     images_direct[n] = camera_direct.capture()
     images_fourier[n] = camera_fourier.capture(roi=roi_fourier)
 
-def _measure_phase(images_phase_fourier, camera_fourier, indices, roi_fourier, n):
+
+def _measure_phase(images_phase_fourier, camera_fourier, indices, roi_fourier, aeag_settling_captures, n):
     sigma_idx, phase_idx, coeff_idx = indices[n]
-    for _ in range(5):
-        # For autoexposure to settle
+    for _ in range(aeag_settling_captures):
         camera_fourier.capture(roi=roi_fourier)
     images_phase_fourier[sigma_idx, phase_idx, coeff_idx] = camera_fourier.capture(roi=roi_fourier)
 
-def main(slm, camera_direct, camera_fourier, roi_fourier, modes, phases, folder, extraction, unitary, NUM_SAMPLES = 8, MAX_MODES = None, opening_mode="a"):
+
+def capture_order(
+    slm,
+    camera_direct,
+    camera_fourier,
+    roi_fourier,
+    modes,
+    phases,
+    order_directory,
+    unitary,
+    opening_mode,
+    config,
+):
     slm_shape = (slm.height, slm.width // 2)
-
-    NUM_SIGMAS, NUM_PHASES = phases.shape[:2]
-
-    if isinstance(modes, tuple):
-        NUM_MODES = len(modes[0])
-    else:
-        NUM_MODES = len(modes)
-
-    if MAX_MODES is not None:
-        NUM_MODES = min(MAX_MODES, NUM_MODES)
+    num_sigmas, num_phases = phases.shape[:2]
+    num_modes = len(modes[0]) if isinstance(modes, tuple) else len(modes)
 
     image_direct = camera_direct.capture()
     image_fourier = camera_fourier.capture(roi=roi_fourier)
 
-    with h5py.File(os.path.join(folder, "data.h5"), opening_mode) as f:
-        images_direct = f.create_dataset("images_direct", (NUM_MODES, *image_direct.shape), image_direct.dtype)
-        images_fourier = f.create_dataset("images_fourier", (NUM_MODES, *image_fourier.shape), image_fourier.dtype)
-        images_phase_fourier = f.create_dataset("images_phase_fourier", (NUM_SIGMAS, NUM_PHASES, NUM_MODES, *image_fourier.shape), image_fourier.dtype)
+    with h5py.File(order_directory / "data.h5", opening_mode) as file:
+        images_direct = file.create_dataset("images_direct", (num_modes, *image_direct.shape), image_direct.dtype)
+        images_fourier = file.create_dataset("images_fourier", (num_modes, *image_fourier.shape), image_fourier.dtype)
+        images_phase_fourier = file.create_dataset(
+            "images_phase_fourier",
+            (num_sigmas, num_phases, num_modes, *image_fourier.shape),
+            image_fourier.dtype,
+        )
 
         print(10 * "-" + "Measuring without phase" + 10 * "-")
-        prepare = partial(_prepare_no_phase, modes, slm_shape, extraction)
-        measure = partial(_measure_no_phase, images_direct, images_fourier, camera_direct, camera_fourier, roi_fourier)
-        slmcontrol.prepare_and_measure(prepare, measure, slm, 0.3, NUM_MODES)
+        prepare = partial(_prepare_no_phase, modes, slm_shape, extraction_linear_combination, config["hologram"])
+        measure = partial(
+            _measure_no_phase,
+            images_direct,
+            images_fourier,
+            camera_direct,
+            camera_fourier,
+            roi_fourier,
+            config["capture"]["aeag_settling_captures"],
+        )
+        slmcontrol.prepare_and_measure(prepare, measure, slm, config["capture"]["settling_time_s"], num_modes)
 
         print(10 * "-" + "Measuring with phase" + 10 * "-")
-        indices = list(itertools.product(range(len(sigmas)), range(NUM_PHASES), range(NUM_MODES)))
+        indices = list(itertools.product(range(num_sigmas), range(num_phases), range(num_modes)))
+        prepare = partial(
+            _prepare_phase,
+            modes,
+            phases,
+            indices,
+            slm_shape,
+            extraction_linear_combination,
+            unitary,
+            config["hologram"],
+        )
+        measure = partial(
+            _measure_phase,
+            images_phase_fourier,
+            camera_fourier,
+            indices,
+            roi_fourier,
+            config["capture"]["aeag_settling_captures"],
+        )
+        slmcontrol.prepare_and_measure(prepare, measure, slm, config["capture"]["settling_time_s"], len(indices))
 
-        prepare = partial(_prepare_phase, modes, phases, indices, slm_shape, extraction, unitary)
-        measure = partial(_measure_phase, images_phase_fourier, camera_fourier, indices, roi_fourier)
-        slmcontrol.prepare_and_measure(prepare, measure, slm, 0.3, len(indices))
-
-    diagnose_linear_combinations.main(folder, NUM_SAMPLES)
-    
-
-def fixed_order_basis(xs, ys, w, order):
-    return np.array([slmcontrol.hg(xs, ys, w=w, m=order-n, n=n) for n in range(order+1)])
-
-def up_to_order_basis(xs, ys, w, order):
-    return np.concatenate([fixed_order_basis(xs, ys, w, o) for o in range(order+1)])
+    diagnose_linear_combinations.main(order_directory, config["capture"]["diagnostic_samples"])
 
 
-print("Running calibration...")
-calibration.main()
+def order_directories(result_directory):
+    return sorted(
+        directory
+        for directory in result_directory.iterdir()
+        if directory.is_dir() and (directory / "modes.h5").is_file()
+    )
 
-calib_res_direct = CalibrationResult.load(os.path.join("calibration_data", "calibration_direct.h5"))
-u, _ = polar(calib_res_direct.transform.matrix)
-inv_u = inv(u)
 
-SIZE = 256
-NUM_MODES = 8
-NUM_PHASES = 4
-NUM_SIGMAS = 2
+def main(result_directory, config_path):
+    from cameras.ImagingSourceNew import ImagingSourceCamera
+    from cameras.Ximea import XimeaCamera
 
-amplitude = np.pi
-sigmas = np.linspace(0.02, 0.04, NUM_SIGMAS)
-folder = "results/test"
-last_folder = os.path.basename(os.path.normpath(folder))
+    result_directory = Path(result_directory)
+    config_path = Path(config_path)
+    config = load_config(config_path)
+    configured_grid_shape = (config["grid"]["size"], config["grid"]["size"])
+    with h5py.File(result_directory / "phases.h5") as file:
+        phases = file["phases"][:]
+        phase_grid_shape = tuple(file["grid_shape"][:])
 
-if last_folder == "test":
-    opening_mode = "w"
-else:
-    opening_mode = "a"
+    if phase_grid_shape != configured_grid_shape:
+        raise ValueError(f"Grid mismatch: config uses {configured_grid_shape}, phases use {phase_grid_shape}.")
 
-os.makedirs(folder, exist_ok=True)
+    calibration_directory = result_directory / "calibration_data"
+    calibration_direct = CalibrationResult.load(calibration_directory / "calibration_direct.h5")
+    unitary, _ = polar(calibration_direct.transform.matrix)
+    roi_fourier = fourier_roi(config)
+    with h5py.File(calibration_directory / "calibration_fourier.h5") as file:
+        recorded_roi = tuple(file["roi"][:])
 
-phases_path = os.path.join(folder, "phases.h5")
+    if recorded_roi != roi_fourier:
+        raise ValueError(f"Fourier ROI mismatch: config uses {roi_fourier}, calibration uses {recorded_roi}.")
 
-if os.path.exists(phases_path):
-    with h5py.File(phases_path) as f:
-        phases = f["phases"][:]
-else:
-    with h5py.File(phases_path, "a") as f:
-        phases = np.array([fourier_phase_screen(SIZE, SIZE, amplitude=amplitude, sigma=sigma, num_samples=NUM_PHASES) for sigma in sigmas])
-        f["phases"] = phases
-        f["sigmas"] = sigmas
-        f["amplitude"] = amplitude
+    prepared_orders = order_directories(result_directory)
+    for order_directory in prepared_orders:
+        with h5py.File(order_directory / "modes.h5") as file:
+            mode_grid_shape = tuple(file["grid_shape"][:])
+        if mode_grid_shape != phase_grid_shape:
+            raise ValueError(f"Grid mismatch: phases use {phase_grid_shape}, modes use {mode_grid_shape}.")
 
-slm = slmcontrol.SLMDisplay(host="localhost")
-camera_direct = ImagingSourceCamera()
-camera_direct.set_exposure(100)
+    snapshot_config(config_path, result_directory)
 
-camera_fourier = XimeaCamera()
+    opening_mode = "w" if result_directory.name == "test" else "a"
+    slm = slmcontrol.SLMDisplay(host=config["slm"]["host"])
+    camera_direct = ImagingSourceCamera()
+    camera_direct.set_exposure(config["direct_camera"]["exposure"])
+    camera_fourier = XimeaCamera()
 
-with h5py.File("calibration_data/calibration_fourier.h5") as f:
-    roi_fourier = np.asarray(f["roi"])
+    fourier_camera = config["fourier_camera"]
+    camera_fourier.camera.enable_aeag()
+    camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"])
+    camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"])
+    camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"])
+    camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"])
+    camera_fourier.camera.set_exp_priority(fourier_camera["exposure_priority"])
+    camera_fourier.camera.set_aeag_level(fourier_camera["aeag_level"])
 
-camera_fourier.camera.enable_aeag()
-camera_fourier.camera.set_aeag_roi_width(roi_fourier[3] - roi_fourier[2])
-camera_fourier.camera.set_aeag_roi_height(roi_fourier[1] - roi_fourier[0])
-camera_fourier.camera.set_aeag_roi_offset_x(roi_fourier[2])
-camera_fourier.camera.set_aeag_roi_offset_y(roi_fourier[0])
-camera_fourier.camera.set_exp_priority(1.0)
-camera_fourier.camera.set_aeag_level(4)
+    try:
+        for order_directory in prepared_orders:
+            with h5py.File(order_directory / "modes.h5") as file:
+                modes = (file["coefficients"][:], file["basis"][:])
 
-_xs = np.arange(SIZE) - SIZE // 2
-_ys = np.arange(SIZE) - SIZE // 2
-xs, ys = np.meshgrid(_xs, _ys)
+            num_modes = len(modes[0])
+            num_sigmas, num_phases = phases.shape[:2]
+            print(f"Capturing {order_directory.name}")
+            print(f"Estimated time: {num_modes * (1 + num_phases * num_sigmas) * 0.3 / 60:.1f} min")
+            capture_order(
+                slm,
+                camera_direct,
+                camera_fourier,
+                roi_fourier,
+                modes,
+                phases,
+                order_directory,
+                unitary,
+                opening_mode,
+                config,
+            )
+    finally:
+        slm.close()
+        camera_direct.close()
+        camera_fourier.close()
 
-print(f"Estimated Time: {(NUM_MODES * (1 + NUM_PHASES * NUM_SIGMAS) * 0.3 / 60)} min/main call")
 
-for n in range(1, 6):
-    print(f"Capturing order up to {n} \n")
-    sub_folder = os.path.join(folder, f"up_to_order_{n}")
-    os.makedirs(sub_folder, exist_ok=True)
-    shutil.copytree("calibration_data", os.path.join(folder, "calibration_data"), dirs_exist_ok=True)
-    basis = up_to_order_basis(xs, ys, 30, n)
-    coefficients = sample_haar_vectors(NUM_MODES, len(basis))
-
-    with h5py.File(os.path.join(sub_folder, "modes.h5"), opening_mode) as f:
-        f["basis"] = basis
-        f["coefficients"] = coefficients
-    
-    modes = (coefficients, basis)
-
-    main(slm, camera_direct, camera_fourier, roi_fourier, modes, phases, sub_folder, extraction_linear_combination, u, NUM_SAMPLES = 8, MAX_MODES=None, opening_mode=opening_mode)
-
-slm.close()
-camera_direct.close()
-camera_fourier.close()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Capture prepared linear-combination measurements.")
+    parser.add_argument("result_directory", type=Path)
+    parser.add_argument("--config", type=Path, default=Path("config.toml"))
+    arguments = parser.parse_args()
+    main(arguments.result_directory, arguments.config)

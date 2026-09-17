@@ -3,6 +3,9 @@ from scipy.ndimage import affine_transform
 from slmcontrol import generate_hologram
 from numpy.linalg import qr
 import h5py
+from typing import Optional, Union, Tuple
+from numpy.typing import ArrayLike
+
 
 def resize_and_center(img, target_shape, scale=1, order=1, cval=0):
     """
@@ -49,8 +52,8 @@ def resize_and_center(img, target_shape, scale=1, order=1, cval=0):
             offset=offset,
             output_shape=tuple(target_shape),
             order=order,
-            mode='constant',
-            cval=cval
+            mode="constant",
+            cval=cval,
         )
     else:
         channels = [
@@ -60,18 +63,21 @@ def resize_and_center(img, target_shape, scale=1, order=1, cval=0):
                 offset=offset,
                 output_shape=tuple(target_shape),
                 order=order,
-                mode='constant',
-                cval=cval
+                mode="constant",
+                cval=cval,
             )
             for c in range(img.shape[2])
         ]
         return np.stack(channels, axis=0)
-    
+
+
 def fourier_transform(mode):
     return np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(mode), norm="ortho"))
 
+
 def inverse_fourier_transform(mode):
     return np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(mode), norm="ortho"))
+
 
 def linear_transformation(input, A, output_shape=None):
     if not output_shape:
@@ -80,11 +86,14 @@ def linear_transformation(input, A, output_shape=None):
     output_center = (np.array([*output_shape])) / 2
 
     # Offset to align centers
-    offset = input_center -  A @ output_center
+    offset = input_center - A @ output_center
 
     return affine_transform(input, A, offset, output_shape=output_shape)
 
-def generate_amplitude_and_phase_hologram(mode, phase, two_pi_modulation, xperiod, yperiod, unitary=None, slm_shape=None):
+
+def generate_amplitude_and_phase_hologram(
+    mode, phase, two_pi_modulation, xperiod, yperiod, unitary=None, slm_shape=None
+):
     if slm_shape is not None:
         mode = resize_and_center(mode, slm_shape, 1)
         phase = resize_and_center(phase, slm_shape, 1)
@@ -96,31 +105,45 @@ def generate_amplitude_and_phase_hologram(mode, phase, two_pi_modulation, xperio
 
     ys, xs = np.indices(mode.shape)
 
-    phase_total = -np.angle(phase_transformation) - 2*np.pi*(xs/xperiod + ys/yperiod)
-    phase_wrapped = np.mod(phase_total, 2*np.pi)
+    phase_total = -np.angle(phase_transformation) - 2 * np.pi * (
+        xs / xperiod + ys / yperiod
+    )
+    phase_wrapped = np.mod(phase_total, 2 * np.pi)
 
-    holo1 = np.uint8(np.round(
-        phase_wrapped * (two_pi_modulation / (2*np.pi))
-    ))
+    holo1 = np.uint8(np.round(phase_wrapped * (two_pi_modulation / (2 * np.pi))))
 
     holo2 = generate_hologram(mode, two_pi_modulation, xperiod, yperiod)
 
     return np.concatenate([holo1, holo2], axis=1)
 
-def complex_randn(*shape):
+
+def complex_randn(
+    shape: Tuple[int, ...], seed: Optional[Union[int, np.random.Generator]] = None
+) -> ArrayLike:
     """
     Generate an array of complex numbers with random real and imaginary parts.
 
     Parameters:
         shape (tuple): The shape of the output array.
+        seed (int or Generator, optional): Seed or Generator instance for reproducibility.
 
     Returns:
         (ArrayLike): An array of complex numbers with the specified shape.
     """
-    return (np.random.randn(*shape).astype(np.float32)
-            + 1j * np.random.randn(*shape).astype(np.float32))
+    # 1. Initialize the modern isolated random generator
+    rng = np.random.default_rng(seed)
 
-def sample_haar_vectors(n_samples: int, dim: int):
+    # 2. Sample real and imaginary parts using standard_normal
+    # (Since shape is passed as a tuple, we don't need * unpacking for standard_normal)
+    real_part = rng.standard_normal(shape, dtype=np.float32)
+    imag_part = rng.standard_normal(shape, dtype=np.float32)
+
+    return real_part + 1j * imag_part
+
+
+def sample_haar_vectors(
+    n_samples: int, dim: int, seed: Optional[Union[int, np.random.Generator]] = None
+):
     """
     Generate random Haar vectors.
 
@@ -135,7 +158,7 @@ def sample_haar_vectors(n_samples: int, dim: int):
         https://pennylane.ai/qml/demos/tutorial_haar_measure/
     """
 
-    Zs = complex_randn(n_samples, dim, dim)
+    Zs = complex_randn((n_samples, dim, dim), seed)
     result = np.empty((n_samples, dim), dtype=np.complex64)
 
     for n, Z in enumerate(Zs):
@@ -144,6 +167,7 @@ def sample_haar_vectors(n_samples: int, dim: int):
         result[n, :] = (Q @ np.diag(lambd) / np.abs(lambd))[0, :]
 
     return result
+
 
 def set_phase_reference(data, posY=0.5, posX=0.5):
     """
@@ -158,20 +182,23 @@ def set_phase_reference(data, posY=0.5, posX=0.5):
 
     return angles
 
+
 def extraction_linear_combination(modes, idx):
     coefficients, basis = modes
     Cs = coefficients[idx].reshape(-1, 1, 1)
     return np.sum(Cs * basis, axis=0)
 
+
 def remove_background(img, bg):
     return np.where(img > bg, img - bg, 0)
+
 
 def load_data(path, key, background=None, calibration_result=None, index=None):
     with h5py.File(path) as f:
         if index is None:
             raw_image = np.asarray(f[key])
         else:
-            raw_image = np.asarray(f[key][index]) #type: ignore
+            raw_image = np.asarray(f[key][index])  # type: ignore
 
         if background is not None:
             raw_image = remove_background(raw_image, background)
@@ -179,4 +206,9 @@ def load_data(path, key, background=None, calibration_result=None, index=None):
         if calibration_result is None:
             return raw_image
         else:
-            return affine_transform(raw_image, calibration_result.transform.matrix, calibration_result.transform.offset, output_shape=calibration_result.output_shape)
+            return affine_transform(
+                raw_image,
+                calibration_result.transform.matrix,
+                calibration_result.transform.offset,
+                output_shape=calibration_result.output_shape,
+            )

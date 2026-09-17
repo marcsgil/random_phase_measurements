@@ -1,0 +1,38 @@
+[grid]
+size = 256
+
+[phases]
+num_samples = 4
+sigmas = [0.02, 0.04]
+amplitude = 3.141592653589793
+seed = 42
+
+[modes]
+orders = [1, 2, 3, 4, 5]
+num_combinations = 8
+waist = 30
+seed = 43
+
+[slm]
+host = "localhost"
+
+[hologram]
+two_pi_modulation = 192
+xperiod = -3
+yperiod = 19
+
+[direct_camera]
+exposure = 100
+
+[fourier_camera]
+offset_x = 372
+offset_y = 484
+width = 384
+height = 384
+exposure_priority = 1.0
+aeag_level = 4
+
+[capture]
+settling_time_s = 0.3
+aeag_settling_captures = 5
+diagnostic_samples = 8

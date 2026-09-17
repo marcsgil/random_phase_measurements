@@ -1,19 +1,26 @@
+import argparse
 import numpy as np
 from slm_camera_calibration import calibrate
-from cameras.Ximea import XimeaCamera
-from cameras.ImagingSourceNew import ImagingSourceCamera
 from common.utils import generate_amplitude_and_phase_hologram, resize_and_center, fourier_transform, inverse_fourier_transform
 import slmcontrol
 import matplotlib.pyplot as plt
 from scipy.ndimage import affine_transform
 import h5py
+from pathlib import Path
 
-def main():
+from acquisition.config import fourier_roi, load_config
+
+
+def main(config_path=Path("config.toml")):
+    from cameras.Ximea import XimeaCamera
+    from cameras.ImagingSourceNew import ImagingSourceCamera
+
+    config = load_config(config_path)
     shifts1d_direct = np.arange(-40, 60, 20, dtype=int)
     shifts_direct = np.array([[y, x] for y in shifts1d_direct for x in shifts1d_direct])
 
     camera_direct = ImagingSourceCamera()
-    camera_direct.set_exposure(100)
+    camera_direct.set_exposure(config["direct_camera"]["exposure"])
     images_direct = np.empty((len(shifts_direct), *camera_direct.capture().shape), dtype=np.uint8)
 
 
@@ -21,22 +28,19 @@ def main():
     shifts_fourier = np.array([[y, x] for y in shifts1d_fourier for x in shifts1d_fourier])
 
     camera_fourier = XimeaCamera()
-    width = 384
-    height = 384
-    offset_x = 372
-    offset_y = 484
+    fourier_camera = config["fourier_camera"]
     camera_fourier.camera.enable_aeag()
-    camera_fourier.camera.set_aeag_roi_width(width)
-    camera_fourier.camera.set_aeag_roi_height(height)
-    camera_fourier.camera.set_aeag_roi_offset_x(offset_x)
-    camera_fourier.camera.set_aeag_roi_offset_y(offset_y)
-    camera_fourier.camera.set_exp_priority(1.0)
-    camera_fourier.camera.set_aeag_level(4)
-    roi_fourier = (offset_y, offset_y + height, offset_x, offset_x + width)
+    camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"])
+    camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"])
+    camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"])
+    camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"])
+    camera_fourier.camera.set_exp_priority(fourier_camera["exposure_priority"])
+    camera_fourier.camera.set_aeag_level(fourier_camera["aeag_level"])
+    roi_fourier = fourier_roi(config)
     images_fourier = np.empty((len(shifts_fourier), *camera_fourier.capture(roi=roi_fourier).shape), dtype=np.uint8)
 
-    slm = slmcontrol.SLMDisplay(host="localhost")
-    N = 256
+    slm = slmcontrol.SLMDisplay(host=config["slm"]["host"])
+    N = config["grid"]["size"]
     _xs = np.arange(N) - N // 2
     _ys = np.arange(N) - N // 2
     xs, ys = np.meshgrid(_xs, _ys)
@@ -46,9 +50,9 @@ def main():
         return generate_amplitude_and_phase_hologram(
             _mode,
             np.zeros_like(_mode),
-            192,
-            -3,
-            19,
+            config["hologram"]["two_pi_modulation"],
+            config["hologram"]["xperiod"],
+            config["hologram"]["yperiod"],
         )
 
     def measure_direct(n):
@@ -69,7 +73,7 @@ def main():
         images=images_direct,
         Xs=shifts_direct,
         slm=slm,
-        settle_time=0.3,
+        settle_time=config["capture"]["settling_time_s"],
     )
 
     result_direct.save("calibration_data/calibration_direct.h5")
@@ -84,7 +88,7 @@ def main():
         images=images_fourier,
         Xs=shifts_fourier,
         slm=slm,
-        settle_time=0.3,
+        settle_time=config["capture"]["settling_time_s"],
     )
 
     result_fourier.save("calibration_data/calibration_fourier.h5")
@@ -131,4 +135,6 @@ def main():
     camera_fourier.close()
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Calibrate the direct and Fourier camera images.")
+    parser.add_argument("--config", type=Path, default=Path("config.toml"))
+    main(parser.parse_args().config)
