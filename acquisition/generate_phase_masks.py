@@ -26,8 +26,10 @@ def fourier_phase_screen(
 ) -> Array:
     qxs = jnp.fft.fftfreq(nx, d=dx / 2 / jnp.pi)
     qys = jnp.fft.fftfreq(ny, d=dy / 2 / jnp.pi)
+    dqx = qxs[1] - qxs[0]
+    dqy = qys[1] - qys[0]
     qxs, qys = jnp.meshgrid(qxs, qys, sparse=True)
-    spectrum_value = spectrum(qxs, qys, **kwargs) * (qxs[1] - qxs[0]) * (qys[1] - qys[0])
+    spectrum_value = spectrum(qxs, qys, **kwargs) * dqx * dqy
     shape = (ny, nx) if num_samples is None else (num_samples, ny, nx)
     random_numbers = random.normal(key, shape=shape, dtype=jnp.complex64)
     return jnp.mod(jnp.real(jnp.fft.ifft2(random_numbers * jnp.sqrt(spectrum_value), norm="forward")), 2 * jnp.pi) - jnp.pi
