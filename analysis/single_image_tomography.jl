@@ -9,11 +9,12 @@ order_directory = joinpath(result_directory, "up_to_order_1")
 sigma_index = 4
 phase_index = 2
 
-background_direct, background_fourier = h5open(
+background_direct, background_fourier, background_phase_fourier = h5open(
     joinpath(result_directory, "background.h5"), "r"
 ) do file
     read(file["images_direct"]),
-    read(file["images_fourier"])
+    read(file["images_fourier"]),
+    read(file["images_phase_fourier"])
 end
 
 function fourier_transform(u)
@@ -58,7 +59,7 @@ for mode_index in axes(coefficients, 2)
     coefficient = coefficients[:, mode_index]
     image = remove_background.(
         images[:, :, mode_index, phase_index, sigma_index],
-        background_fourier,
+        background_phase_fourier[:, :, sigma_index],
     )
 
     theoretical_outcomes = get_probabilities(

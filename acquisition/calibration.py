@@ -37,13 +37,7 @@ def main(result_directory, config_path=Path("config.toml")):
 
     camera_fourier = XimeaCamera()
     fourier_camera = config["fourier_camera"]
-    camera_fourier.camera.enable_aeag()
-    camera_fourier.camera.set_aeag_roi_width(fourier_camera["width"])
-    camera_fourier.camera.set_aeag_roi_height(fourier_camera["height"])
-    camera_fourier.camera.set_aeag_roi_offset_x(fourier_camera["offset_x"])
-    camera_fourier.camera.set_aeag_roi_offset_y(fourier_camera["offset_y"])
-    camera_fourier.camera.set_exp_priority(fourier_camera["exposure_priority"])
-    camera_fourier.camera.set_aeag_level(fourier_camera["aeag_level"])
+    camera_fourier.set_exposure(fourier_camera["fourier_exposure"])
     roi_fourier = fourier_roi(config)
     images_fourier = np.empty((len(shifts_fourier), *camera_fourier.capture(roi=roi_fourier).shape), dtype=np.uint8)
 
@@ -67,9 +61,6 @@ def main(result_directory, config_path=Path("config.toml")):
         images_direct[n] = camera_direct.capture()
 
     def measure_fourier(n):
-        for _ in range(2):
-            # For autoexposure to settle
-            camera_fourier.capture()
         images_fourier[n] = camera_fourier.capture(roi=roi_fourier)
 
     base_mode_direct = slmcontrol.hg(xs, ys, w=20)

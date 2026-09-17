@@ -30,6 +30,11 @@ def main(folder, num_samples, extraction=extraction_linear_combination):
     with h5py.File(result_directory / "phases.h5") as file:
         phases = np.asarray(file["phases"])
 
+    with h5py.File(result_directory / "background.h5") as file:
+        background_direct = np.asarray(file["images_direct"])
+        background_fourier = np.asarray(file["images_fourier"])
+        background_phase_fourier = np.asarray(file["images_phase_fourier"])
+
     num_modes = coefficients.shape[0]
     num_sigmas, num_phases = phases.shape[:2]
 
@@ -43,13 +48,13 @@ def main(folder, num_samples, extraction=extraction_linear_combination):
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
 
             image_direct = affine_transform(
-                remove_background(file["images_direct"][index], 5),
+                remove_background(file["images_direct"][index], background_direct),
                 calibration_direct.transform.matrix,
                 calibration_direct.transform.offset,
                 output_shape=calibration_direct.output_shape,
             )
-            image_fourier = remove_background(file["images_fourier"][index], 5)
-            image_phase_fourier = remove_background(file["images_phase_fourier"][0, 0, index], 5)
+            image_fourier = remove_background(file["images_fourier"][index], background_fourier)
+            image_phase_fourier = remove_background(file["images_phase_fourier"][0, 0, index], background_phase_fourier[0])
             theory_direct = np.abs(mode) ** 2
             theory_fourier = np.abs(camera_grid(mode_fourier, calibration_fourier, fourier_shape)) ** 2
             theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
@@ -74,7 +79,7 @@ def main(folder, num_samples, extraction=extraction_linear_combination):
             mode = extraction(modes, 0)
             phase = phases[index, 0]
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
-            image_phase_fourier = remove_background(file["images_phase_fourier"][index, 0, 0], 5)
+            image_phase_fourier = remove_background(file["images_phase_fourier"][index, 0, 0], background_phase_fourier[index])
             theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
 
             figure, axes = plt.subplots(1, 3, figsize=(10, 4))
@@ -91,7 +96,7 @@ def main(folder, num_samples, extraction=extraction_linear_combination):
             mode = extraction(modes, 0)
             phase = phases[0, index]
             mode_phase_fourier = fourier_transform(mode * np.exp(1j * phase))
-            image_phase_fourier = remove_background(file["images_phase_fourier"][0, index, 0], 5)
+            image_phase_fourier = remove_background(file["images_phase_fourier"][0, index, 0], background_phase_fourier[0])
             theory_phase_fourier = np.abs(camera_grid(mode_phase_fourier, calibration_fourier, fourier_shape)) ** 2
 
             figure, axes = plt.subplots(1, 3, figsize=(10, 4))
