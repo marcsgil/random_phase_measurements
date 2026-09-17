@@ -15,6 +15,7 @@ Run Python modules from the repository root, for example:
 ```bash
 cp config_example.toml config.toml
 python -m acquisition.calibration
+python -m acquisition.capture_background results/test
 python -m acquisition.generate_phase_masks results/test
 python -m acquisition.generate_modes results/test
 python -m preprocessing.match_phase_fourier_basis_to_experiment results/test
