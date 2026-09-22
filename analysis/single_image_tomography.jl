@@ -1,13 +1,9 @@
-using CairoMakie
-using FFTW
-using HDF5
-using LinearAlgebra
-using QuantumMeasurements
+using CairoMakie, FFTW, HDF5, LinearAlgebra, QuantumMeasurements, ProgressMeter, Statistics
 
-result_directory = "results/test"
-order_directory = joinpath(result_directory, "up_to_order_1")
-sigma_index = 4
-phase_index = 2
+result_directory = "results/new/big"
+order_directory = joinpath(result_directory, "up_to_order_2")
+sigma_index = 1
+phase_index = 3
 
 background_direct, background_fourier, background_phase_fourier = h5open(
     joinpath(result_directory, "background.h5"), "r"
@@ -55,7 +51,13 @@ method = MaximumLikelihood()
 
 mkpath("plots")
 
-for mode_index in axes(coefficients, 2)
+size(images)
+
+fidelities = Array{Float64}(undef, size(coefficients, 2))
+
+p = Progress(length(fidelities))
+
+Threads.@threads for mode_index in 1:10
     coefficient = coefficients[:, mode_index]
     image = remove_background.(
         images[:, :, mode_index, phase_index, sigma_index],
@@ -72,20 +74,28 @@ for mode_index in axes(coefficients, 2)
     rho = estimate_state(vec(image), measurement_matrix, method)[1]
     psi = project2pure(rho)
 
+    fidelities[mode_index] = fidelity(psi, coefficient)
+
     predicted_image = reshape(get_probabilities(measurement_matrix, traceless_vectorization(psi)), size(image))
 
     plot_images = (theoretical_image, zero2nan.(image), predicted_image)
     fig_titles = ("Theory", "Experiment", "Prediction")
 
-    with_theme(theme_latexfonts()) do 
-        figure = Figure(size=(1000, 400))
+    if mode_index < 10
+        with_theme(theme_latexfonts()) do 
+            figure = Figure(size=(1000, 400))
 
-        for n ∈ 1:3
-            ax = Axis(figure[1, n], title=fig_titles[n], aspect=1)
-            heatmap!(ax, plot_images[n])
-            hidedecorations!(ax)
+            for n ∈ 1:3
+                ax = Axis(figure[1, n], title=fig_titles[n], aspect=1)
+                heatmap!(ax, plot_images[n])
+                hidedecorations!(ax)
+            end
+            Label(figure[0, :], "Fidelity: $(round(Int, 100*fidelities[mode_index])) %", fontsize = 16, font = :bold)
+            save("plots/temp_$mode_index.png", figure)
         end
-        Label(figure[0, :], "Fidelity: $(round(Int, 100*fidelity(psi, coefficient))) %", fontsize = 16, font = :bold)
-        save("plots/temp_$mode_index.png", figure)
     end
+    next!(p)
 end
+
+print("$(mean(fidelities)) ± $(std(fidelities))")
+hist(fidelities, bins=0.7:0.002:1)
