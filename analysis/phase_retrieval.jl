@@ -1,9 +1,9 @@
 using CairoMakie, FFTW, HDF5, LinearAlgebra, PoissonPhaseRetrieval, ProgressMeter, Statistics
 
 result_directory = "results/new/big"
-order_directory = joinpath(result_directory, "up_to_order_2")
-sigma_index = 1
-phase_index = 7
+order_directory = joinpath(result_directory, "up_to_order_4")
+sigma_index = 3
+phase_index = 2
 
 background_direct, background_fourier, background_phase_fourier = h5open(
     joinpath(result_directory, "background.h5"), "r"
@@ -26,7 +26,7 @@ function center_crop(image, crop_size)
     column = (size(image, 2) - crop_size) ÷ 2 + 1
     @view image[row:(row+crop_size-1), column:(column+crop_size-1)]
 end
-##
+
 coefficients = h5open(joinpath(order_directory, "modes.h5"), "r") do file
     read(file["coefficients"])
 end
@@ -54,20 +54,21 @@ p = Progress(length(indices))
 
 for mode_index in indices
     coefficient = coefficients[:, mode_index]
-    image = remove_background.(
-        images[:, :, mode_index],
-        background_phase_fourier[:, :, sigma_index],
-    )
+    # image = remove_background.(
+    #     images[:, :, mode_index],
+    #     background_phase_fourier[:, :, sigma_index],
+    # )
+    image = images[:, :, mode_index]
 
     y = vec(image)
-    b = zero(y)
+    b = vec(background_phase_fourier[:, :, sigma_index])
     x0 = optimal_initialization(reshapen_phase_fourier_basis, y, b)
     ψ, loss = poisson_phase_retrieval(reshapen_phase_fourier_basis, x0, y, b, 200, Val(true))
 
     # println("Computed Loss: $loss")
-    println("----------------")
-    println("Loss at true state: $(loss[end])")
-    println("Loss at solution state: $(compute_loss(ψ, reshapen_phase_fourier_basis, y, b))")
+    # println("----------------")
+    # println("Loss at true state: $(loss[end])")
+    # println("Loss at solution state: $(compute_loss(ψ, reshapen_phase_fourier_basis, y, b))")
 
     normalize!(ψ)
     fidelities[mode_index] = abs2(coefficient ⋅ ψ)
@@ -93,7 +94,7 @@ for mode_index in indices
     next!(p)
 end
 
-print("$(median(fidelities)) ± $(std(fidelities))")
+println("$(median(fidelities)) ± $(std(fidelities))")
 # hist(fidelities, bins=0.7:0.002:1)
 
 fidelities
