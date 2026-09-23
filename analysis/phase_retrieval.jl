@@ -1,4 +1,4 @@
-using CairoMakie, FFTW, HDF5, LinearAlgebra, QuantumMeasurements, ProgressMeter, Statistics
+using CairoMakie, FFTW, HDF5, LinearAlgebra, PoissonPhaseRetrieval, ProgressMeter, Statistics
 
 result_directory = "results/new/big"
 order_directory = joinpath(result_directory, "up_to_order_2")
@@ -17,7 +17,6 @@ function fourier_transform(u)
     dims = (1, 2)
     fftshift(fft(ifftshift(u, dims), dims), dims) / sqrt(size(u, 1) * size(u, 2))
 end
-
 
 remove_background(image::T, background) where {T} = image > background + 1 ? image - background - one(T) : zero(image-background - one(T))
 zero2nan(image) = image > 0 ? image : NaN
@@ -44,61 +43,60 @@ end;
 
 basis ./= sqrt.(sum(abs2, basis, dims=(1, 2)))
 phase_fourier_basis = fourier_transform(basis .* phase_factor)
-
-measurement_vectors = (conj.(vector) for vector in eachslice(phase_fourier_basis, dims=(1, 2)))
-measurement_matrix = assemble_measurement_matrix(measurement_vectors)
-
-method = MaximumLikelihood()
-
-mkpath("plots")
+reshapen_phase_fourier_basis = reshape(phase_fourier_basis, :, size(phase_fourier_basis, 3))
 ##
-indices = 1:100
+mkpath("plots")
+
+indices = 1:10
 
 fidelities = Array{Float64}(undef, length(indices))
 p = Progress(length(indices))
 
-Threads.@threads for mode_index in indices
+for mode_index in indices
     coefficient = coefficients[:, mode_index]
     image = remove_background.(
         images[:, :, mode_index],
         background_phase_fourier[:, :, sigma_index],
     )
 
-    theoretical_outcomes = get_probabilities(
-        measurement_matrix,
-        traceless_vectorization(coefficient),
-    )
-    theoretical_image = reshape(theoretical_outcomes, size(image))
+    y = vec(image)
+    b = zero(y)
+    x0 = optimal_initialization(reshapen_phase_fourier_basis, y, b)
+    ψ, loss = poisson_phase_retrieval(reshapen_phase_fourier_basis, x0, y, b, 200, Val(true))
 
+    # println("Computed Loss: $loss")
+    println("----------------")
+    println("Loss at true state: $(loss[end])")
+    println("Loss at solution state: $(compute_loss(ψ, reshapen_phase_fourier_basis, y, b))")
 
-    rho = estimate_state(vec(image), measurement_matrix, method)[1]
-    psi = project2pure(rho)
+    normalize!(ψ)
+    fidelities[mode_index] = abs2(coefficient ⋅ ψ)
 
-    fidelities[mode_index] = fidelity(psi, coefficient)
+    # predicted_image = reshape(get_probabilities(measurement_matrix, traceless_vectorization(psi)), size(image))
 
-    predicted_image = reshape(get_probabilities(measurement_matrix, traceless_vectorization(psi)), size(image))
+    # plot_images = (theoretical_image, zero2nan.(image), predicted_image)
+    # fig_titles = ("Theory", "Experiment", "Prediction")
 
-    plot_images = (theoretical_image, zero2nan.(image), predicted_image)
-    fig_titles = ("Theory", "Experiment", "Prediction")
+    # if mode_index < 10
+    #     with_theme(theme_latexfonts()) do
+    #         figure = Figure(size=(1000, 400))
 
-    if mode_index < 10
-        with_theme(theme_latexfonts()) do 
-            figure = Figure(size=(1000, 400))
-
-            for n ∈ 1:3
-                ax = Axis(figure[1, n], title=fig_titles[n], aspect=1)
-                heatmap!(ax, plot_images[n])
-                hidedecorations!(ax)
-            end
-            Label(figure[0, :], "Fidelity: $(round(Int, 100*fidelities[mode_index])) %", fontsize = 16, font = :bold)
-            save("plots/temp_$mode_index.png", figure)
-        end
-    end
+    #         for n ∈ 1:3
+    #             ax = Axis(figure[1, n], title=fig_titles[n], aspect=1)
+    #             heatmap!(ax, plot_images[n])
+    #             hidedecorations!(ax)
+    #         end
+    #         Label(figure[0, :], "Fidelity: $(round(Int, 100*fidelities[mode_index])) %", fontsize=16, font=:bold)
+    #         save("plots/temp_$mode_index.png", figure)
+    #     end
+    # end
     next!(p)
 end
 
 print("$(median(fidelities)) ± $(std(fidelities))")
-hist(fidelities, bins=0.7:0.002:1)
+# hist(fidelities, bins=0.7:0.002:1)
+
+fidelities
 ##
 worst_idx = argmax(fidelities)
 θ_worst = traceless_vectorization(coefficients[:, worst_idx])
