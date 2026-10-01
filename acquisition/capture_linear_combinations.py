@@ -34,7 +34,7 @@ def _prepare_no_phase(mode, slm_shape, extraction, hologram_config, n):
 def _prepare_phase(mode, phases, indices, slm_shape, extraction, unitary, hologram_config, n):
     sigma_idx, phase_idx, coeff_idx = indices[n]
     mode = extraction(mode, coeff_idx)
-    phase = linear_transformation(np.flip(phases[sigma_idx, phase_idx], axis=1), unitary)
+    phase = linear_transformation(np.flip(phases[sigma_idx, phase_idx], axis=(0, 1)), np.eye(2))
     return generate_amplitude_and_phase_hologram(mode, phase, slm_shape=slm_shape, **hologram_config)
 
 

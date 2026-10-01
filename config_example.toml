@@ -18,8 +18,8 @@ host = "localhost"
 
 [hologram]
 two_pi_modulation = 192
-xperiod = -3
-yperiod = 19
+xperiod = 4
+yperiod = inf
 
 [direct_camera]
 exposure = 100

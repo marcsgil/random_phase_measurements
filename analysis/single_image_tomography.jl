@@ -1,7 +1,7 @@
 using CairoMakie, FFTW, HDF5, LinearAlgebra, QuantumMeasurements, ProgressMeter, Statistics
 
-result_directory = "results/new/big"
-order_directory = joinpath(result_directory, "up_to_order_2")
+result_directory = "results/new_setup"
+order_directory = joinpath(result_directory, "up_to_order_1")
 sigma_index = 1
 phase_index = 7
 

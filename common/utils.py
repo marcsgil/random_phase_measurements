@@ -105,14 +105,13 @@ def generate_amplitude_and_phase_hologram(
 
     ys, xs = np.indices(mode.shape)
 
-    phase_total = -np.angle(phase_transformation) - 2 * np.pi * (
+    phase_total = np.angle(phase_transformation) + 2 * np.pi * (
         xs / xperiod + ys / yperiod
     )
     phase_wrapped = np.mod(phase_total, 2 * np.pi)
 
-    holo1 = np.uint8(np.round(phase_wrapped * (two_pi_modulation / (2 * np.pi))))
-
-    holo2 = generate_hologram(mode, two_pi_modulation, xperiod, yperiod)
+    holo1 = generate_hologram(np.flip(mode, axis=(0, 1)), -two_pi_modulation, xperiod, yperiod)
+    holo2 = np.uint8(np.round(np.flip(phase_wrapped, axis=1) * (two_pi_modulation / (2 * np.pi))))
 
     return np.concatenate([holo1, holo2], axis=1)
 
