@@ -14,19 +14,19 @@ Run Python modules from the repository root, for example:
 
 ```bash
 cp config_example.toml config.toml
-python -m acquisition.run results/run_001
+uv run -m acquisition.run results/run_001
 ```
 
 The one-shot command requires a destination that does not already exist. To
 run individual stages instead:
 
 ```bash
-python -m acquisition.calibration results/test
-python -m acquisition.capture_background results/test
-python -m acquisition.generate_phase_masks results/test
-python -m acquisition.generate_modes results/test
-python -m preprocessing.match_phase_fourier_basis_to_experiment results/test
-python -m acquisition.capture_linear_combinations results/test
+uv run -m acquisition.calibration results/test
+uv run -m acquisition.capture_background results/test
+uv run -m acquisition.generate_phase_masks results/test
+uv run -m acquisition.generate_modes results/test
+uv run -m preprocessing.match_phase_fourier_basis_to_experiment results/test
+uv run -m acquisition.capture_linear_combinations results/test
 ```
 
 Each preparation, calibration, and capture snapshots the active `config.toml`

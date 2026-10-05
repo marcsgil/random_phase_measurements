@@ -1,13 +1,11 @@
 import argparse
 from pathlib import Path
 from typing import Callable
-
+import tomllib
 import h5py
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, random
-
-from acquisition.config import load_config, snapshot_config
 
 
 def gaussian_spectrum(qx, qy, amplitude, sigma):
@@ -35,12 +33,13 @@ def fourier_phase_screen(
     return jnp.mod(jnp.real(jnp.fft.ifft2(random_numbers * jnp.sqrt(spectrum_value), norm="forward")), 2 * jnp.pi) - jnp.pi
 
 
-def main(result_directory, config_path):
+def main(result_directory):
     result_directory = Path(result_directory)
-    result_directory.mkdir(parents=True, exist_ok=True)
-    config_path = Path(config_path)
-    config = load_config(config_path)
-    snapshot_config(config_path, result_directory)
+    if not result_directory.exists():
+            raise ValueError(f"Directory {str(result_directory)} does not exist. The calibration must be run beforehand, which creates the directory.")
+    config_path = result_directory / "config.toml"
+    with config_path.open("rb") as file:
+        config = tomllib.load(file)
 
     size = config["grid"]["size"]
     phase_config = config["phases"]
@@ -72,6 +71,5 @@ if __name__ == "__main__":
         description="Generate phase masks for an acquisition run."
     )
     parser.add_argument("result_directory", type=Path)
-    parser.add_argument("--config", type=Path, default=Path("config.toml"))
     arguments = parser.parse_args()
-    main(arguments.result_directory, arguments.config)
+    main(arguments.result_directory)

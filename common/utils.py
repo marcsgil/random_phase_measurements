@@ -5,6 +5,7 @@ from numpy.linalg import qr
 import h5py
 from typing import Optional, Union, Tuple
 from numpy.typing import ArrayLike
+from scipy.signal import ZoomFFT
 
 
 def resize_and_center(img, target_shape, scale=1, order=1, cval=0):
@@ -92,7 +93,7 @@ def linear_transformation(input, A, output_shape=None):
 
 
 def generate_amplitude_and_phase_hologram(
-    mode, phase, two_pi_modulation, xperiod, yperiod, unitary=None, slm_shape=None
+    mode, phase, two_pi_modulation, xperiod, yperiod, unitary=None, slm_shape=None, method="BesselJ1"
 ):
     if slm_shape is not None:
         mode = resize_and_center(mode, slm_shape, 1)
@@ -110,7 +111,7 @@ def generate_amplitude_and_phase_hologram(
     )
     phase_wrapped = np.mod(phase_total, 2 * np.pi)
 
-    holo1 = generate_hologram(np.flip(mode, axis=(0, 1)), -two_pi_modulation, xperiod, yperiod)
+    holo1 = generate_hologram(np.flip(mode, axis=(0, 1)), -two_pi_modulation, xperiod, yperiod, method)
     holo2 = np.uint8(np.round(np.flip(phase_wrapped, axis=1) * (two_pi_modulation / (2 * np.pi))))
 
     return np.concatenate([holo1, holo2], axis=1)
@@ -211,3 +212,111 @@ def load_data(path, key, background=None, calibration_result=None, index=None):
                 calibration_result.transform.offset,
                 output_shape=calibration_result.output_shape,
             )
+
+def calculate_centroid(image, threshold):
+    """
+    Calculate the intensity-weighted centroid of a 2D image.
+
+    Pixels below `threshold * max(image)` are excluded from the calculation.
+
+    Parameters:
+    - image: 2D numpy array
+    - threshold: float in [0, 1], fraction of the image maximum used as cutoff
+
+    Returns:
+    - np.array([y_centroid, x_centroid]), or [nan, nan] if all pixels are masked
+    """
+    max_val = np.max(image)
+    threshold_value = threshold * max_val
+
+    # Create mask for pixels above threshold
+    mask = image >= threshold_value
+
+    # Calculate total weight (sum of intensities above threshold)
+    total_weight = np.sum(image[mask])
+
+    if total_weight <= 0:
+        return np.array([np.nan, np.nan])
+
+    # Get coordinates
+    y_coords, x_coords = np.indices(image.shape)
+
+    # Calculate weighted centroids
+    x_centroid = np.sum(x_coords[mask] * image[mask]) / total_weight
+    y_centroid = np.sum(y_coords[mask] * image[mask]) / total_weight
+
+    return np.array([y_centroid, x_centroid])
+
+def calculate_variance(image, threshold):
+    max_val = np.max(image)
+    threshold_value = threshold * max_val
+
+    # Create mask for pixels above threshold
+    mask = image >= threshold_value
+
+    # Calculate total weight (sum of intensities above threshold)
+    total_weight = np.sum(image[mask])
+
+    if total_weight <= 0:
+        return np.array([np.nan, np.nan])
+
+    # Get coordinates
+    y_coords, x_coords = np.indices(image.shape)
+
+    x_centroid = np.sum(x_coords[mask] * image[mask]) / total_weight
+    y_centroid = np.sum(y_coords[mask] * image[mask]) / total_weight
+
+    return np.sum(((x_coords-x_centroid)**2 + (y_coords-y_centroid)**2 - (x_coords-x_centroid) * (y_coords-y_centroid)) * image) / total_weight
+
+def fidelity(u, v):
+    return np.abs(np.sum(np.conj(u) * v))**2 / np.sum(np.abs(u)**2) / np.sum(np.abs(v)**2) 
+
+def zoomfft2(u, zoom=1.0):
+    Nx = u.shape[-1]
+    Ny = u.shape[-2]
+
+    fx = np.linspace(
+        -1/(2*zoom),
+         1/(2*zoom),
+        Nx,
+        endpoint=False,
+    )
+
+    fy = np.linspace(
+        -1/(2*zoom),
+         1/(2*zoom),
+        Ny,
+        endpoint=False,
+    )
+
+    zx = ZoomFFT(
+        Nx,
+        fn=[-1/(2*zoom), 1/(2*zoom)],
+        m=Nx,
+        fs=1,
+        endpoint=False,
+    )
+
+    zy = ZoomFFT(
+        Ny,
+        fn=[-1/(2*zoom), 1/(2*zoom)],
+        m=Ny,
+        fs=1,
+        endpoint=False,
+    )
+
+    U = zx(u, axis=-1)
+    U = zy(U, axis=-2)
+
+    # Spatial origin is at array center
+    x0 = Nx // 2
+    y0 = Ny // 2
+
+    phase = np.exp(
+        2j * np.pi * (
+            fy[:, None] * y0
+            + fx[None, :] * x0
+        )
+    )
+
+    return U * phase

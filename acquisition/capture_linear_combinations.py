@@ -40,13 +40,12 @@ def _prepare_phase(mode, phases, indices, slm_shape, extraction, unitary, hologr
 
 def _measure_no_phase(images_direct, images_fourier, camera_direct, camera_fourier, roi_fourier, num_frames, n):
     images_direct[n] = mean_capture(camera_direct, num_frames)
-    images_fourier[n] = mean_capture(camera_fourier, num_frames, roi=roi_fourier)
+    images_fourier[n] = np.flip(mean_capture(camera_fourier, num_frames, roi=roi_fourier), axis=0)
 
 
 def _measure_phase(images_phase_fourier, camera_fourier, indices, roi_fourier, num_frames, n):
     sigma_idx, phase_idx, coeff_idx = indices[n]
-    images_phase_fourier[sigma_idx, phase_idx, coeff_idx] = mean_capture(camera_fourier, num_frames, roi=roi_fourier)
-
+    images_phase_fourier[sigma_idx, phase_idx, coeff_idx] = np.flip(mean_capture(camera_fourier, num_frames, roi=roi_fourier), axis=0)
 
 def capture_order(
     slm,
