@@ -1,0 +1,830 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=25mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,urlcolor=blue!55!black]{hyperref}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,columns=fullflexible,keepspaces=true,frame=single}
+\newcommand{\C}{\mathbb C}
+\newcommand{\R}{\mathbb R}
+\newcommand{\E}{\mathbb E}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\RePart}{\operatorname{Re}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\title{Fisher Information for Pure-State Phase Retrieval\\\large Comparing phase screens through local reconstruction sensitivity}
+\author{Study note for \texttt{random\_phase\_measurements}}
+\date{October 6, 2026}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A normalized complex state in dimension $d$, modulo global phase, has
+$2d-2$ real parameters. This note constructs local coordinates for those
+parameters and derives the classical Fisher information for intensity
+measurements, with the aim of comparing reconstruction quality as the
+phase-screen parameters, especially the spectral width $\sigma$, change.
+The main analysis uses a fixed estimated signal power and background,
+appropriate to the intended intense-laser experiment with negligible camera
+cropping. It relates the inverse Fisher trace to local infidelity and
+distinguishes measurement sensitivity from optimizer convergence. A detailed
+unknown-power treatment is retained in Appendix~\ref{app:unknown-power}.
+\end{abstract}
+
+\section{The estimation problem}
+Let $\{u_j\}_{j=1}^d$ be an orthonormal mode basis, and write the input field as
+\begin{equation}
+ U(\mathbf r)=\sum_{j=1}^d x_j u_j(\mathbf r),\qquad
+ x=\sqrt{s}\,\psi,\qquad \psi^\dagger\psi=1,\quad s>0.
+\end{equation}
+The desired state is the ray represented by $\psi$: multiplying it by a
+constant phase does not change the state. The brightness $s$ is also absent
+from the normalized-state fidelity, but it can affect the measured counts.
+It must therefore be distinguished from global phase.
+
+For one phase screen, let $A\in\C^{M\times d}$ contain the propagated basis
+fields sampled at the $M$ camera pixels. In the point-sampling model,
+\begin{equation}
+ q_i(\psi)=|(A\psi)_i|^2,\qquad
+ y_i\overset{\mathrm{ind}}\sim\operatorname{Poisson}(\lambda_i),\qquad
+ \lambda_i=sq_i(\psi)+b_i, \label{eq:model}
+\end{equation}
+where $b_i$ is the known mean background in the same count units.
+The Poisson phase-retrieval objective of Li, Lange, and Fessler is
+$\sum_i[\lambda_i-y_i\log\lambda_i]$, up to constants independent of the
+parameters \cite{li2022}. Here $s$ is a scale parameter; it equals the
+expected detected signal count only when $\sum_iq_i=1$.
+
+For finite pixel integration, replace $q_i$ by
+$\psi^\dagger E_i\psi$, where $E_i$ integrates the propagated mode products
+over pixel $i$. The rank-one expression in \eqref{eq:model} is its
+point-sampling approximation. The camera-POVM viewpoint and finite-subspace
+tomography are developed in Ref.~\cite{oliveira2025}.
+
+For all Hermite--Gaussian modes of total order at most $L$,
+\begin{equation}
+ d=\frac{(L+1)(L+2)}{2}.
+\end{equation}
+At $L=4$, $d=15$: pure-state estimation needs 28 real state parameters,
+whereas unrestricted density-matrix tomography needs 224.
+
+\subsection{Experimental regime and power convention}
+The objective is to compare phase screens, mainly as their spectral width
+$\sigma$ changes, rather than to study uncertainty in optical power.
+The intended experiment uses intense laser illumination, an independently
+estimated background, and camera coverage with no substantial cropping.
+We therefore treat the estimated signal power and background as fixed in
+the main Fisher calculation. Their estimation uncertainty is neglected in
+this approximation; the background is not assumed to be physically zero.
+
+If the calibrated propagation approximately preserves power on the mode
+subspace, $A_\sigma^\dagger A_\sigma\approx I$, a per-image estimate is
+\begin{equation}
+ \widehat s=\sum_i(y_i-\widehat b_i),\qquad
+ \widehat{\sqrt{s}}=\sqrt{\widehat s}.
+ \label{eq:estimated-power}
+\end{equation}
+Here $\widehat s$ is required to be positive. The sum uses the signed
+background-subtracted values, without clipping individual pixels, since
+clipping would bias the total upwards. If the common power convention is
+$A_\sigma^\dagger A_\sigma\approx\alpha I$, divide the sum by $\alpha$.
+Column normalization alone does not establish either identity; the basis
+must also remain approximately orthogonal on the detector grid.
+
+Background subtraction in \eqref{eq:estimated-power} is used only to
+estimate total signal power. The Poisson likelihood still receives the
+original images and uses $\lambda_i=sq_i+\widehat b_i$. It does not receive
+a clipped, background-subtracted image. For the remainder of the main
+analysis, $s$ and $b$ denote fixed values, including plug-in estimates.
+The existing unconstrained solver may continue to fit the norm of $x$
+implicitly and normalize its output; this diagnostic convention does not
+require changing the solver.
+
+For controlled comparisons between $\sigma$ values, use a common reference
+signal power $s_{\mathrm{ref}}$, background model, and set of test states.
+This isolates the change in the measurement from incidental brightness
+variation. Per-image power estimates remain useful for interpreting actual
+experimental runs, but their Fisher values correspond to those runs' own
+resources. If backgrounds vary with exposure, include that variation when
+assessing the actual acquisition conditions and state it separately from
+the comparison at common power.
+
+In the background-free, power-preserving limit, state and power are exactly
+Fisher-orthogonal, so treating power as fixed causes no loss of state
+information relative to fitting it. Weak background motivates using this
+as an approximation in the intense regime. The exact correction for unknown
+power, including its assumptions and numerical implementation, is developed
+in Appendix~\ref{app:unknown-power}.
+
+\section{Removing normalization and global phase}
+Using the real and imaginary parts of all $d$ coefficients gives $2d$
+real coordinates. Normalization removes one degree of freedom; identifying
+$\psi$ with $e^{i\phi}\psi$ removes another. The physical parameter space is
+complex projective space $\mathbb{CP}^{d-1}$.
+
+Fix a normalized reference state $\psi$, at which the information is to be
+evaluated. Choose $Q\in\C^{d\times(d-1)}$ satisfying
+\begin{equation}
+ Q^\dagger Q=I_{d-1},\qquad Q^\dagger\psi=0.
+ \label{eq:Q}
+\end{equation}
+An SVD nullspace of $\psi^\dagger$ supplies such a basis. For real
+$u,v\in\R^{d-1}$, define the local chart
+\begin{equation}
+ \psi(\theta)=\frac{\psi+Q(u+iv)}{\sqrt{1+\norm{u}^2+\norm{v}^2}},
+ \qquad \theta=\begin{pmatrix}u\\v\end{pmatrix}\in\R^{2d-2}.
+ \label{eq:chart}
+\end{equation}
+It is normalized exactly and automatically fixes the global phase, because
+its overlap with the reference state is real and positive:
+\begin{equation}
+ \psi^\dagger\psi(\theta)
+ =\frac{1}{\sqrt{1+\norm{u}^2+\norm{v}^2}}>0.
+\end{equation}
+This follows directly from $\psi^\dagger Q=0$; no additional constraint
+needs to be imposed. It describes a neighborhood of the reference
+ray; no single global chart is needed for a local Fisher calculation.
+
+At $\theta=0$, introduce
+\begin{equation}
+ H=[\,Q\quad iQ\,],\qquad \delta\psi=H\delta\theta.
+\end{equation}
+Then
+\begin{equation}
+ \psi^\dagger\delta\psi=0,\qquad
+ \norm{\delta\psi}^2=\norm{\delta\theta}^2,\qquad
+ \RePart(H^\dagger H)=I_{2d-2}.
+ \label{eq:metric}
+\end{equation}
+Thus $H$ is an orthonormal tangent basis over the \emph{real} numbers.
+The excluded complex line contains both the radial direction $\psi$ and
+the phase direction $i\psi$. This construction is consistent with the
+local pure-state coordinates used in Fisher-symmetric tomography
+\cite{li2016}.
+
+\section{Intensity Jacobian and Poisson Fisher information}
+Set $w=A\psi$ and $B=AH=[\,AQ\quad iAQ\,]$. Differentiating
+$q_i=w_i^*w_i$ gives
+\begin{equation}
+ J_{ik}=\left.\frac{\partial q_i}{\partial\theta_k}\right|_0
+ =2\RePart(w_i^*B_{ik}),\qquad
+ J\in\R^{M\times(2d-2)}. \label{eq:J}
+\end{equation}
+For general pixel operators, the corresponding formula is
+$J_{ik}=2\RePart(\psi^\dagger E_i H_{:k})$.
+
+For arbitrary real parameters $\eta$, the log-likelihood score is
+\begin{equation}
+ \partial_a\ell=\sum_i\left(\frac{y_i}{\lambda_i}-1\right)
+ \partial_a\lambda_i.
+\end{equation}
+Using independence and $\operatorname{Var}(y_i)=\lambda_i$ yields the
+\emph{expected classical Fisher information}
+\begin{equation}
+ F_{ab}=\E[(\partial_a\ell)(\partial_b\ell)]
+ =\sum_i\frac{\partial_a\lambda_i\,\partial_b\lambda_i}{\lambda_i}.
+ \label{eq:fisher}
+\end{equation}
+For known $s$ and $b$, let $W=\diag(1/\lambda_i)$. Then
+\begin{equation}
+ \boxed{F_{\mathrm{pure}}=F_{\theta\theta}=s^2J^{\mathsf T}WJ.} \label{eq:known}
+\end{equation}
+All matrices in this expression except the intermediate optical fields are
+real. The displayed formulas assume strictly positive $\lambda_i$.
+
+\subsection{Why the optimizer's Fisher expression is different}
+The WF step-size rule in Ref.~\cite{li2022}, also used by the local
+\texttt{PoissonPhaseRetrieval} package, employs the complex matrix
+\begin{equation}
+ A^\dagger\diag\!\left(\frac{4|(Ax)_i|^2}{|(Ax)_i|^2+b_i}\right)A.
+ \label{eq:wf}
+\end{equation}
+This is the complex score-based quantity used in that update rule. It is
+not the real-parameter Fisher matrix for normalized states modulo phase.
+For example, a perturbation $\delta x=ix$ leaves every intensity unchanged:
+its physical Fisher information is zero. The quadratic form of
+\eqref{eq:wf} along $ix$ is generally nonzero. Therefore one should derive
+the diagnostic from the real intensity Jacobian, rather than invert the
+step-size matrix. This distinction does not invalidate the WF update rule.
+
+\section{Global uniqueness and the proposed results}\label{sec:uniqueness}
+The motivation for phase modulation is that a direct image can fail to
+identify even a pure state. Local Fisher information and global uniqueness
+must therefore be distinguished before interpreting a reconstruction result.
+
+\subsection{The order-1 direct-image ambiguity}
+Choose real order-1 basis fields $h_1=\mathrm{HG}_{10}$ and
+$h_2=\mathrm{HG}_{01}$ in the observation plane. For
+$U=a h_1+b h_2$,
+\begin{equation}
+ |U|^2=|a|^2h_1^2+|b|^2h_2^2
+ +2\RePart(a^*b)h_1h_2.
+\end{equation}
+The image does not depend on the imaginary coherence. In Bloch coordinates
+$\rho=(I+r_x\sigma_x+r_y\sigma_y+r_z\sigma_z)/2$, it is
+\begin{equation}
+ I(\mathbf r)=\frac{1+r_z}{2}h_1^2+
+ \frac{1-r_z}{2}h_2^2+r_xh_1h_2.
+\end{equation}
+The two LG states proportional to $h_1\pm i h_2$ are opposite poles of
+the unobserved $r_y$ axis. Every line segment in the Bloch ball parallel
+to that axis consists of mixed states with the same image. A generic such
+line intersects the pure-state sphere twice, giving indistinguishable
+pure states related by $r_y\mapsto-r_y$.
+
+Nevertheless, the pure-state tangent Fisher matrix can have full rank at
+$r_y\ne0$: within a fixed hemisphere, the measured coordinates $(r_x,r_z)$
+locally specify a point on the sphere. The reflected state remains globally
+indistinguishable. At $r_y=0$, the first-order tangent sensitivity also loses
+a direction. Thus full tangent Fisher rank at a sampled state is not a
+certificate of global pure-state uniqueness.
+
+\subsection{Full-tomography rank as a sufficient uniqueness test}
+For each phase screen, let $T_\sigma$ be the traceless part of the
+full-tomography measurement matrix, so that the signal measurements have
+an affine dependence on Bloch coordinates:
+\begin{equation}
+ q(\rho)=c_\sigma+T_\sigma t,\qquad
+ q(\rho_1)-q(\rho_2)=T_\sigma(t_1-t_2).
+\end{equation}
+At fixed nonzero power and known background, equality of Poisson means
+is equivalent to equality of these signal measurements. Therefore
+\begin{equation}
+ \rank(T_\sigma)=d^2-1
+ \quad\Longrightarrow\quad
+ \text{global uniqueness for all density matrices, hence all pure states}.
+ \label{eq:full-rank-sufficient}
+\end{equation}
+If $T_\sigma$ is deficient, a nonzero kernel direction generates
+indistinguishable physical density matrices around the maximally mixed
+state. It does not necessarily generate indistinguishable pure states.
+Full-tomography rank is therefore sufficient, but not necessary, for the
+pure-state objective.
+
+For strictly positive outcome probabilities, the full-tomography Fisher
+matrix has the same rank as $T_\sigma$, since its diagonal weighting is
+invertible. Its rank consequently has a global implication because the
+measurement map is affine, even though the Fisher matrix itself describes
+local uncertainty. Its eigenvalues and inverse trace remain state dependent.
+
+\subsection{The exact pure-state criterion, when needed}
+Define the linear measurement map on Hermitian matrices by
+\begin{equation}
+ \mathcal L_\sigma(X)_i=\tr(E_{\sigma,i}X).
+\end{equation}
+Two normalized pure states have the same image exactly when
+$\mathcal L_\sigma(\psi\psi^\dagger-\phi\phi^\dagger)=0$.
+Their difference is Hermitian, traceless, and has rank at most two.
+Conversely, a nonzero traceless Hermitian matrix of rank at most two has
+spectral form $a(uu^\dagger-vv^\dagger)$, where $a\ne0$ and $u,v$ are
+orthonormal. Hence
+\begin{equation}
+\boxed{\ker\mathcal L_\sigma\ \cap\
+ \{X=X^\dagger:\ \tr X=0,\ \rank X\le2\}=\{0\}.}
+\end{equation}
+This condition is equivalent to global uniqueness among normalized pure states.
+This is the normalized-state specialization of low-rank-kernel criteria
+in tomography with prior information and complex phase retrieval
+\cite{heinosaari2013,conca2015}.
+
+An optional global separation diagnostic is
+\begin{equation}
+ \beta_\sigma=\min_{\substack{X=X^\dagger,\ \tr X=0\\
+ \rank X\le2,\ \norm{X}_F=1}}\norm{\mathcal L_\sigma(X)}_2.
+\end{equation}
+The constraint set is compact. Consequently, $\beta_\sigma>0$ is equivalent
+to global uniqueness, and zero indicates an exact ambiguity. It can be
+searched over $X=(uu^\dagger-vv^\dagger)/\sqrt2$ with orthonormal $u,v$.
+A local numerical search that finds a collision provides evidence of
+nonuniqueness, subject to residual tolerance; failing to find one does not
+certify a positive global minimum. This optimization is not required for
+the proposed main results wherever \eqref{eq:full-rank-sufficient} applies.
+
+\subsection{Two complementary results versus screen roughness}
+The proposed presentation consists of two separate results:
+\begin{enumerate}
+ \item \textbf{Full-tomography rank versus $\sigma$.}
+ Plot $\rank(T_\sigma)$, or its normalized value
+ $\rank(T_\sigma)/(d^2-1)$, and identify the sampled region where full
+ column rank is obtained. For order up to 4, the target rank is 224.
+ This establishes a sufficient global uniqueness criterion for the modeled
+ measurement. Use the traceless matrix $T_\sigma$, not the complex optical
+ matrix $A_\sigma$ and not the matrix including the identity column.
+ In \texttt{QuantumMeasurements}, it is obtained with
+ \texttt{get\_traceless\_part(measurement\_matrix)}.
+ \item \textbf{Pure-state inverse Fisher trace versus $\sigma$.}
+ Evaluate $\tr(F_{\mathrm{pure}}(\sigma;\psi)^{-1})$ at common signal power
+ and background over the same normalized test states. Report a central
+ statistic and spread across states and screen realizations. For order
+ up to 4, this Fisher matrix has dimension 28. Lower inverse trace means
+ a better local precision benchmark for normalized-state reconstruction.
+ The metric remains local even in a region where global uniqueness has
+ already been established by the first result.
+\end{enumerate}
+
+Numerical rank requires an explicit tolerance, for example counting
+singular values larger than $\epsilon_{\mathrm{rel}}$ times the largest
+singular value. State the grid, model, arithmetic precision, and tolerance,
+and examine the smallest singular values near the apparent transition.
+A weak phase screen can lift an exact degeneracy by an extremely small
+amount: an observed onset of numerical full rank need not be a sharp
+mathematical threshold in $\sigma$. Repeat the calculation for several
+screen realizations; a region found on a sampled grid is not a guarantee
+for every screen or every intermediate value of $\sigma$.
+
+The second result shows precision within the identifiable region, which
+rank alone cannot quantify. It can also be evaluated outside that region,
+but full local Fisher rank there must not be presented as global uniqueness.
+Neither roughness nor full rank guarantees monotonic improvement in the
+inverse trace, and neither diagnostic guarantees convergence of a chosen
+phase-retrieval algorithm. Experimental reconstruction fidelity remains
+an additional test of the complete inference procedure.
+
+\section{Connection to full tomography and fidelity}
+Let $\{\omega_a\}_{a=1}^{d^2-1}$ be an orthonormal traceless Hermitian basis
+and $t_a=\tr(\rho\omega_a)$. For a normalized POVM, write
+$p=c+Tt$. The matrix returned by \texttt{QuantumMeasurements.fisher} for
+an ordinary measurement matrix is
+\begin{equation}
+ F_{\mathrm{tom}}=T^{\mathsf T}\diag(1/p_i)T.
+\end{equation}
+It is per-detection information in all $d^2-1$ density-matrix coordinates.
+Passing a pure state as its evaluation point does not change that dimension.
+
+One can restrict this existing matrix to the pure-state tangent space.
+At $\rho=\psi\psi^\dagger$, define
+\begin{equation}
+ R_{ak}=\frac{\partial t_a}{\partial\theta_k}
+ =\tr\!\left[\omega_a(H_{:k}\psi^\dagger+\psi H_{:k}^\dagger)\right]
+ =2\RePart(\psi^\dagger\omega_aH_{:k}).
+\end{equation}
+The chain rule gives
+\begin{equation}
+ F_{\mathrm{pure},1}=R^{\mathsf T}F_{\mathrm{tom}}R.
+\end{equation}
+For the same normalized measurement model, this equals the direct
+probability-Jacobian calculation, with $p_i=q_i/\sum_jq_j$ and
+$J_p=\partial p/\partial\theta$ for the conditional, background-free
+model. This per-detection formula is distinct from the fixed-power Poisson
+formula with additive background. Building the Jacobian directly avoids constructing
+the much larger full-tomography matrix. For orthonormal $\omega_a$,
+$R^{\mathsf T}R=2I$: this factor matters when comparing coordinate conventions.
+
+Define fidelity by $\mathcal F(\psi,\phi)=|\psi^\dagger\phi|^2$.
+The chart \eqref{eq:chart} gives the exact identity
+\begin{equation}
+ 1-\mathcal F(\psi,\psi(\theta))
+ =\frac{\norm{\theta}^2}{1+\norm{\theta}^2}
+ =\norm{\theta}^2+O(\norm{\theta}^4).
+\end{equation}
+For a regular, locally unbiased estimator, the Cram\'er--Rao inequality
+implies $\operatorname{Cov}(\widehat\theta)\succeq F_{\mathrm{pure}}^{-1}$.
+Consequently,
+\begin{equation}
+ \E[1-\mathcal F]\ \gtrsim\ \tr(F_{\mathrm{pure}}^{-1})
+ \label{eq:infidelity}
+\end{equation}
+is a \emph{local, small-error benchmark}, not an exact finite-sample
+inequality for infidelity. For fixed $N$ and per-photon $F_1$, the benchmark
+is $\tr(F_1^{-1})/N$. Asymptotically efficient estimators can attain the
+leading term under suitable regularity conditions. Bias, model mismatch,
+and convergence to another solution can invalidate that prediction.
+
+The trace is meaningful here because the coordinates are orthonormal for
+the local fidelity metric. In general coordinates $\xi$, if
+$1-\mathcal F\simeq\delta\xi^{\mathsf T}M\delta\xi$, the corresponding
+quantity is $\tr(MF_\xi^{-1})$. Under a change of $Q$ satisfying
+\eqref{eq:Q}, the induced real coordinate change is orthogonal, so the
+Fisher eigenvalues and inverse trace above are unchanged.
+
+\section{What to compute and how to interpret it}\label{sec:diagnostics}
+Define the weighted state Jacobian
+\begin{equation}
+ G=\diag(\lambda^{-1/2})sJ,\qquad F_{\mathrm{pure}}=G^{\mathsf T}G.
+\end{equation}
+This is a Gram matrix of the weighted state derivatives. Prefer computing
+an SVD of $G$ directly: forming its Gram matrix squares the condition number
+and can obscure small singular values. Let
+$\tau_1\ge\cdots\ge\tau_{2d-2}$ be the singular values of $G$; the symbol
+$\tau$ distinguishes them from the phase-screen parameter $\sigma$. Then
+\begin{equation}
+ \rank(F_{\mathrm{pure}})=\rank(G),\qquad
+ \kappa_2(F_{\mathrm{pure}})=\left(\frac{\tau_1}{\tau_{2d-2}}\right)^2,
+ \qquad \tr(F_{\mathrm{pure}}^{-1})=\sum_k\tau_k^{-2}.
+\end{equation}
+Use a stated numerical rank tolerance. A missing physical direction makes
+the ordinary inverse-trace criterion divergent; using a pseudoinverse and
+silently discarding that direction would make the measurement look better
+than it is. A singular Fisher matrix means failure of regular first-order
+identifiability; higher-order identifiability requires separate analysis.
+
+Full rank is a local property. It does not exclude a distant state with the
+same intensities, and it does not ensure that a particular initialization
+converges to the desired solution. Condition number measures anisotropy,
+not absolute precision: $\epsilon I$ is perfectly conditioned but carries
+little information when $\epsilon$ is small. Report the inverse trace and
+smallest eigenvalue as well, with a fixed resource convention (incident
+brightness or detected photon number).
+
+For each tested $\sigma$, screen realization, and normalized input state,
+construct $A_\sigma$, the state tangent basis, and $J_\sigma$. At common
+power and background, the comparison uses
+\begin{equation}
+ F_{\mathrm{pure}}(\sigma;\psi)
+ =s_{\mathrm{ref}}^2J_\sigma^{\mathsf T}
+ \diag\!\left(\frac{1}{s_{\mathrm{ref}}|(A_\sigma\psi)_i|^2+b_i}\right)
+ J_\sigma.
+\end{equation}
+The diagonal entries are understood pixel by pixel. Evaluate the same
+collection of Haar-sampled normalized states for all screens. Report the
+fraction of deficient cases, median inverse trace, an upper quantile or
+worst observed value, smallest eigenvalue, and condition number. Include
+several screen realizations at each $\sigma$ to distinguish systematic
+parameter effects from one favorable or unfavorable realization.
+
+Compare these statistical diagnostics with experimental fidelities and
+noiseless recovery from multiple initializations. Fisher information
+predicts local sensitivity to measurement noise near the evaluated state;
+it does not predict whether spectral initialization reaches the correct
+optimization basin. A screen can have good local information and still
+produce poor reconstruction with a particular optimizer. Thus fidelity
+versus $\sigma$ reflects both the measurement design and solver behavior.
+
+Zero-probability pixels need special care: the regular formulas can contain
+$0/0$, and their limits may depend on the approach direction. A physical
+positive background removes this particular singularity. Adding an arbitrary
+numerical floor changes the model and should be disclosed. Likewise, raw
+camera values require an appropriate gain/noise model; saturation and clipped
+background subtraction are not independent Poisson counting processes.
+
+\section{A compact Julia implementation}
+The following computes the Poisson state information and its weighted
+Jacobian for fixed estimated power and background. An optional argument
+enables the unknown-power correction from Appendix~\ref{app:unknown-power}. It assumes
+an orthonormal coefficient basis and strictly positive expected pixel means.
+It accepts a scalar background or a vector of length $M$.
+
+\begin{lstlisting}
+using LinearAlgebra
+
+function pure_state_fisher(A, psi; scale=1.0, background=0.0,
+                          unknown_scale=false)
+    scale > 0 || throw(ArgumentError("scale must be positive"))
+    norm(psi) > 0 || throw(ArgumentError("state must be nonzero"))
+    p = normalize(complex.(psi))
+    Q = nullspace(reshape(conj.(p), 1, length(p)))
+    H = hcat(Q, im * Q)
+    w = A * p
+    q = abs2.(w)
+    J = 2 .* real.(conj.(w) .* (A * H))
+    lambda = scale .* q .+ background
+    all(isfinite, lambda) && all(>(0), lambda) ||
+        throw(ArgumentError("expected means must be finite and positive"))
+    G = (scale .* J) ./ sqrt.(lambda)
+    if unknown_scale
+        h = q ./ sqrt.(lambda)
+        dot(h, h) > 0 || throw(ArgumentError("unobservable scale"))
+        G -= h * ((h' * G) / dot(h, h))
+    end
+    return Symmetric(G' * G), G
+end
+
+# Example: use the true prepared coefficient vector to assess a screen.
+# F, G = pure_state_fisher(A, coefficient;
+#     scale=reference_signal_power, background=background_counts)
+# singular_values = svdvals(G)
+# Check numerical rank before computing:
+# inverse_trace = sum(inv(abs2(t)) for t in singular_values)
+\end{lstlisting}
+
+The reference state is held fixed while constructing $Q$ and differentiating
+the chart. For real data it may be replaced by an estimated state, producing
+a plug-in local diagnostic. With the default \texttt{unknown\_scale=false}, the function returns
+$F_{\mathrm{pure}}$ for the main fixed-power approximation. Setting it to
+\texttt{true} instead returns $F_{\mathrm{eff}}$ from the appendix.
+The function evaluates information only; it does not modify the
+phase-retrieval optimizer.
+
+\clearpage
+\appendix
+\section{Unknown power as a nuisance parameter}\label{app:unknown-power}
+When $s$ is fitted rather than known, the joint Jacobian for $(\theta,s)$ is
+\begin{equation}
+ K=[\,sJ\quad q\,],\qquad F_{\mathrm{joint}}=K^{\mathsf T}WK
+ =\begin{pmatrix}
+ F_{\theta\theta}&F_{\theta s}\\
+ F_{s\theta}&F_{ss}
+ \end{pmatrix},
+\end{equation}
+with $F_{\theta s}=sJ^{\mathsf T}Wq$ and $F_{ss}=q^{\mathsf T}Wq$.
+If $F_{ss}>0$, the information available for the state when brightness is
+unknown is
+\begin{equation}
+ \boxed{F_{\mathrm{eff}}=F_{\theta\theta}
+ -F_{\theta s}F_{ss}^{-1}F_{s\theta}.} \label{eq:schur}
+\end{equation}
+This expression is the \emph{Schur complement} of the brightness block.
+The subtraction accounts for state changes that can be partially imitated
+by a change in brightness. The following two derivations explain both its
+statistical meaning and its algebraic origin.
+
+\subsection{Derivation from local distinguishability}
+Let $\eta_0=(0,s_0)$ denote the true parameters in the local state chart,
+and let $P_\eta$ denote the joint distribution of all the pixel counts.
+Consider the expected increase in negative log-likelihood when a candidate
+parameter $\eta_0+\delta\eta$ replaces the true one:
+\begin{equation}
+ \mathcal D(\delta\eta)
+ =\E_{\eta_0}\!\left[
+ \log\frac{P_{\eta_0}(y)}{P_{\eta_0+\delta\eta}(y)}\right].
+\end{equation}
+This is a Kullback--Leibler divergence. Under the regularity conditions
+used to define the Fisher information, its first derivative at zero
+vanishes and its Hessian is $F_{\mathrm{joint}}$. Therefore
+\begin{equation}
+ \mathcal D(\delta\eta)
+ =\frac12\delta\eta^{\mathsf T}F_{\mathrm{joint}}\delta\eta
+ +o(\norm{\delta\eta}^2).
+\end{equation}
+The quadratic term measures how distinguishable nearby parameter values
+are in the measurement statistics. With
+$\delta\eta=(\delta\theta,\delta s)$, it is
+\begin{equation}
+ \mathcal D_{\mathrm{quad}}(\delta\theta,\delta s)
+ =\frac12\left[
+ \delta\theta^{\mathsf T}F_{\theta\theta}\delta\theta
+ +2\delta s\,F_{s\theta}\delta\theta
+ +F_{ss}(\delta s)^2\right].
+ \label{eq:joint-quadratic}
+\end{equation}
+If brightness is known, the candidate brightness cannot change:
+$\delta s=0$. The resulting state curvature is simply
+$F_{\theta\theta}$.
+
+If brightness is unknown, a candidate state change can be accompanied by
+a brightness change. For a fixed $\delta\theta$, minimize
+\eqref{eq:joint-quadratic} over $\delta s$ to find the candidate brightness
+that makes the state change hardest to distinguish. Since $F_{ss}>0$,
+this is a strictly convex scalar quadratic. Its stationary point obeys
+\begin{equation}
+ \frac{\partial\mathcal D_{\mathrm{quad}}}{\partial\delta s}
+ =F_{s\theta}\delta\theta+F_{ss}\delta s=0,
+\end{equation}
+and hence
+\begin{equation}
+ \delta s_*=-F_{ss}^{-1}F_{s\theta}\delta\theta.
+\end{equation}
+Substitution gives
+\begin{align}
+ \min_{\delta s}\mathcal D_{\mathrm{quad}}
+ &=\frac12\left[
+ \delta\theta^{\mathsf T}F_{\theta\theta}\delta\theta
+ -2\delta\theta^{\mathsf T}F_{\theta s}F_{ss}^{-1}
+ F_{s\theta}\delta\theta
+ +\delta\theta^{\mathsf T}F_{\theta s}F_{ss}^{-1}
+ F_{s\theta}\delta\theta\right]\\
+ &=\frac12\delta\theta^{\mathsf T}
+ \left(F_{\theta\theta}-F_{\theta s}F_{ss}^{-1}F_{s\theta}\right)
+ \delta\theta
+ =\frac12\delta\theta^{\mathsf T}F_{\mathrm{eff}}\delta\theta.
+\end{align}
+Equivalently, completing the square gives the useful identity
+\begin{equation}
+ 2\mathcal D_{\mathrm{quad}}
+ =\delta\theta^{\mathsf T}F_{\mathrm{eff}}\delta\theta
+ +F_{ss}\left(\delta s+
+ F_{ss}^{-1}F_{s\theta}\delta\theta\right)^2.
+\end{equation}
+Thus $F_{\mathrm{eff}}$ is the remaining local distinguishability after
+brightness has been allowed to adjust. This is a local quadratic
+elimination of brightness, not a claim that the complete nonlinear
+likelihood has a closed-form brightness optimizer with background present.
+
+\subsection{Derivation from the joint covariance bound}
+Suppose the state and brightness are estimated jointly. For a regular,
+locally unbiased estimator, their joint covariance satisfies
+\begin{equation}
+ \operatorname{Cov}(\widehat\theta,\widehat s)
+ \succeq F_{\mathrm{joint}}^{-1}.
+\end{equation}
+The relevant bound on state uncertainty is the upper-left block of this
+inverse. It is not generally the inverse of the upper-left block of
+$F_{\mathrm{joint}}$.
+
+To obtain that block directly, write
+$C=F_{\mathrm{joint}}^{-1}$ and use the block equations in
+$F_{\mathrm{joint}}C=I$:
+\begin{align}
+ F_{\theta\theta}C_{\theta\theta}
+ +F_{\theta s}C_{s\theta}&=I,\\
+ F_{s\theta}C_{\theta\theta}+F_{ss}C_{s\theta}&=0.
+\end{align}
+The second equation gives
+$C_{s\theta}=-F_{ss}^{-1}F_{s\theta}C_{\theta\theta}$.
+Inserting this into the first equation yields
+\begin{equation}
+ \left(F_{\theta\theta}-F_{\theta s}F_{ss}^{-1}F_{s\theta}\right)
+ C_{\theta\theta}=I.
+\end{equation}
+Consequently, when the necessary inverses exist,
+\begin{equation}
+ (F_{\mathrm{joint}}^{-1})_{\theta\theta}=F_{\mathrm{eff}}^{-1},
+ \qquad
+ \operatorname{Cov}(\widehat\theta)\succeq F_{\mathrm{eff}}^{-1}.
+\end{equation}
+Dropping the brightness row and column before inversion would give
+$F_{\theta\theta}^{-1}$, the bound for known brightness, and would miss
+the uncertainty due to estimating $s$.
+
+\subsection{How much information is lost?}
+The removed term is positive semidefinite, because for every real vector $a$
+\begin{equation}
+ a^{\mathsf T}F_{\theta s}F_{ss}^{-1}F_{s\theta}a
+ =\frac{(F_{s\theta}a)^2}{F_{ss}}\ge0.
+\end{equation}
+Thus $F_{\mathrm{eff}}\preceq F_{\theta\theta}$: allowing unknown
+brightness cannot improve the state information at fixed true parameters.
+Since brightness is a scalar, the correction has rank at most one.
+If $F_{\theta s}=0$, brightness and state are locally Fisher-orthogonal,
+so $F_{\mathrm{eff}}=F_{\theta\theta}$ and there is no information loss.
+
+For a single state coordinate $t$, write
+\begin{equation}
+ F_{\mathrm{joint}}=\begin{pmatrix}a&c\\c&b\end{pmatrix},
+ \qquad F_{\mathrm{eff}}=a-\frac{c^2}{b}.
+\end{equation}
+Here $b$ denotes the scalar brightness-information block, not a pixel
+background. If $a,b>0$, set $\gamma=c/\sqrt{ab}$; positive
+semidefiniteness implies $|\gamma|\le1$. Then
+$F_{\mathrm{eff}}=a(1-\gamma^2)$.
+For example, $a=10$, $b=4$, and $c=6$ give $F_{\mathrm{eff}}=1$:
+the state variance bound rises from $1/10$ with known brightness to $1$
+with unknown brightness. At $|\gamma|=1$, the two changes are
+indistinguishable to first order and the effective information vanishes.
+
+\subsection{Projection form for computation}
+
+A Gram matrix records inner products between a collection of vectors.
+For a real matrix $G$ with columns $g_k$, its Gram matrix is
+\begin{equation}
+ (G^{\mathsf T}G)_{jk}=g_j^{\mathsf T}g_k.
+\end{equation}
+It is positive semidefinite, since
+$a^{\mathsf T}G^{\mathsf T}Ga=\norm{Ga}^2\ge0$ for every real $a$.
+The Fisher blocks have precisely this structure when the measurement
+derivatives are weighted by their Poisson standard deviations. Define
+\begin{equation}
+ G=\diag(\lambda^{-1/2})sJ,\qquad
+ h=\diag(\lambda^{-1/2})q.
+\end{equation}
+Each column of $G$ describes a weighted change in the expected measurements
+along a state direction, while $h$ describes the weighted brightness change.
+Consequently,
+\begin{equation}
+ F_{\theta\theta}=G^{\mathsf T}G,\qquad
+ F_{\theta s}=G^{\mathsf T}h,\qquad F_{ss}=h^{\mathsf T}h,
+\end{equation}
+and the Schur complement becomes
+\begin{equation}
+ F_{\mathrm{eff}}=G^{\mathsf T}G
+ -\frac{G^{\mathsf T}hh^{\mathsf T}G}{h^{\mathsf T}h}.
+ \label{eq:gram-subtraction}
+\end{equation}
+Both terms in this subtraction are Gram matrices. For the second, set
+$r_h=h^{\mathsf T}G/\norm{h}$; then the correction is
+$r_h^{\mathsf T}r_h$. The first term contains all the local state
+information for known brightness, and the second removes the contribution
+that brightness changes can imitate.
+
+\paragraph{Why subtraction can be inaccurate.}
+Equation~\eqref{eq:gram-subtraction} is mathematically correct. The numerical
+problem arises when the removed contribution is almost as large as the
+original one: subtracting nearly equal floating-point quantities can erase
+the small residual information. For a single state direction, consider
+\begin{equation}
+ G=\begin{pmatrix}1\\\varepsilon\end{pmatrix},\qquad
+ h=\begin{pmatrix}1\\0\end{pmatrix}.
+\end{equation}
+In exact arithmetic,
+\begin{equation}
+ F_{\mathrm{eff}}=(1+\varepsilon^2)-1=\varepsilon^2.
+\end{equation}
+If $\varepsilon=10^{-8}$, ordinary double precision can round
+$1+\varepsilon^2$ to $1$, so the computed subtraction gives zero instead
+of $10^{-16}$. In a larger matrix, rounding can likewise yield spurious
+small negative eigenvalues, even though the exact effective information
+is positive semidefinite. These errors are particularly consequential
+when the smallest eigenvalues determine rank or the inverse trace.
+
+\paragraph{Project first, then form inner products.}
+Let $P_h=hh^{\mathsf T}/(h^{\mathsf T}h)$ be the orthogonal projector
+onto the brightness-derivative direction, and define
+\begin{equation}
+ G_\perp=(I-P_h)G
+ =G-h\frac{h^{\mathsf T}G}{h^{\mathsf T}h}.
+\end{equation}
+Since $P_h^{\mathsf T}=P_h$ and $P_h^2=P_h$,
+\begin{align}
+ G_\perp^{\mathsf T}G_\perp
+ &=G^{\mathsf T}(I-P_h)^{\mathsf T}(I-P_h)G\\
+ &=G^{\mathsf T}(I-P_h)G
+ =F_{\mathrm{eff}}.
+\end{align}
+Thus the effective Fisher matrix is itself a Gram matrix of the state
+derivatives after removing the brightness component. In the example above,
+$G_\perp=(0,\varepsilon)^{\mathsf T}$, whose squared norm directly gives
+$\varepsilon^2$ without subtracting nearly equal squared quantities.
+
+The projection still involves subtraction and cannot recover information
+below the precision of the supplied derivatives, nor cure physical
+near-confounding. Its advantage is that it removes the nuisance component
+before squaring the derivatives and retains the Gram structure. For rank,
+condition number, and inverse-trace diagnostics, prefer an SVD of
+$G_\perp$ directly: forming a Gram matrix squares the condition number and
+can obscure the weakest directions. The singular-value formulas in
+Section~\ref{sec:diagnostics} apply with $G$ replaced by $G_\perp$ and
+$F_{\mathrm{pure}}$ by $F_{\mathrm{eff}}$. A QR or SVD treatment of the
+nuisance derivative span extends this
+projection to several nuisance parameters.
+
+Unknown background or calibration parameters can be handled by adding
+their derivative columns and projecting out their span, provided the
+nuisance model is identifiable or otherwise appropriately constrained.
+
+\subsection{Conditioning on the number of detections}
+For $b=0$, define $S=\sum_iq_i$, $p_i=q_i/S$, and
+$r=J^{\mathsf T}\mathbf 1$. The probability Jacobian is
+\begin{equation}
+ J_p=\frac{J-pr^{\mathsf T}}{S},\qquad
+ F_1=J_p^{\mathsf T}\diag(1/p_i)J_p. \label{eq:conditional}
+\end{equation}
+Here $F_1$ is information per detected photon. Conditional on a fixed total
+of $N$ detections, the information is $NF_1$. Direct substitution gives
+\begin{equation}
+ F_{\mathrm{eff}}=s\left[J^{\mathsf T}\diag(1/q_i)J
+ -\frac{rr^{\mathsf T}}{S}\right]=sS F_1.
+\end{equation}
+Thus eliminating unknown brightness in the background-free Poisson model
+agrees with the conditional formulation at the expected count $sS$.
+
+If $A^\dagger A=I$, then $S=1$ for every normalized state and $r=0$.
+Brightness and state are then Fisher-orthogonal, and
+$F_{\mathrm{eff}}=sF_1=sJ^{\mathsf T}\diag(1/q_i)J$.
+Normalizing each column of $A$ separately does \emph{not} guarantee
+$A^\dagger A=I$. Finite camera coverage can make $S$ state dependent.
+With nonzero additive background, conditioning on total counts generally
+does not eliminate $s$, because signal-to-background proportions depend on it.
+
+
+\begin{thebibliography}{9}
+\bibitem{oliveira2025}
+M. Gil de Oliveira, A. L. S. Santos Junior, P. M. R. Lima,
+A. C. Barbosa, B. Pinheiro da Silva, S. P\'adua, and A. Z. Khoury,
+``Informationally Complete Orbital Angular Momentum Tomography with
+Intensity Measurements,'' arXiv:2404.05616v3 (2025).
+\url{https://arxiv.org/abs/2404.05616}.
+Background for the camera POVM, Bloch-coordinate measurement matrix,
+and conditional detection under obstructions.
+
+\bibitem{li2022}
+Z. Li, K. Lange, and J. A. Fessler,
+``Poisson Phase Retrieval in Very Low-count Regimes,''
+\emph{IEEE Transactions on Computational Imaging} (2022),
+\href{https://doi.org/10.1109/TCI.2022.3209936}{doi:10.1109/TCI.2022.3209936};
+arXiv:2104.00861v4.
+\url{https://arxiv.org/abs/2104.00861}.
+See Eqs.~(6)--(14) for the likelihood and WF step-size construction,
+and Sec.~III A for spectral initialization.
+
+\bibitem{li2016}
+N. Li, C. Ferrie, J. A. Gross, A. Kalev, and C. M. Caves,
+``Fisher-symmetric informationally complete measurements for pure states,''
+\emph{Physical Review Letters} \textbf{116}, 180402 (2016).
+\href{https://doi.org/10.1103/PhysRevLett.116.180402}{doi:10.1103/PhysRevLett.116.180402};
+\url{https://arxiv.org/abs/1507.06904}.
+Reference for local pure-state parameters and Fisher information,
+including the distinction between local and global completeness.
+
+\bibitem{heinosaari2013}
+T. Heinosaari, L. Mazzarella, and M. M. Wolf,
+``Quantum Tomography under Prior Information,''
+\emph{Communications in Mathematical Physics} \textbf{318}, 355--374 (2013).
+\href{https://doi.org/10.1007/s00220-013-1671-8}{doi:10.1007/s00220-013-1671-8};
+\url{https://arxiv.org/abs/1109.5478}.
+Reference for informational completeness restricted to pure or bounded-rank
+states; the linked arXiv version includes a later correction to an outcome bound.
+
+\bibitem{conca2015}
+A. Conca, D. Edidin, M. Hering, and C. Vinzant,
+``An algebraic characterization of injectivity in phase retrieval,''
+\emph{Applied and Computational Harmonic Analysis} \textbf{38}, 346--356 (2015).
+\href{https://doi.org/10.1016/j.acha.2014.06.005}{doi:10.1016/j.acha.2014.06.005};
+\url{https://arxiv.org/abs/1312.0158}.
+Reference for global complex phase-retrieval injectivity and the
+rank-at-most-two Hermitian kernel criterion.
+\end{thebibliography}
+\end{document}

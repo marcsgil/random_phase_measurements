@@ -15,3 +15,12 @@ plots
 calibration_data
 results
 config.toml
+
+# LaTeX-generated files
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+/docs/pure_state_fisher_information.pdf

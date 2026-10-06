@@ -1,9 +1,9 @@
 using CairoMakie, FFTW, HDF5, LinearAlgebra, PoissonPhaseRetrieval, ProgressMeter, Statistics, FourierTools
 
 result_directory = "results/test"
-order_directory = joinpath(result_directory, "up_to_order_2")
-sigma_index = 1
-phase_index = 1
+order_directory = joinpath(result_directory, "up_to_order_4")
+sigma_index = 4
+phase_index = 2
 
 function fourier_transform(u, zoom=1)
     czt(u, (zoom, zoom, 1), (1,2))
@@ -47,43 +47,19 @@ p = Progress(length(indices))
 
 for mode_index in indices
     coefficient = coefficients[:, mode_index]
-    image = remove_background.(
-        images[:, :, mode_index],
-        3,
-    )
-    image = images[:, :, mode_index]
+    # image = remove_background.(
+    #     images[:, :, mode_index],
+    #     3,
+    # )
 
-    y = vec(image)
-    b = zero(y)
+    y = vec(images[:, :, mode_index])
+    b = fill(3 * one(eltype(y)), length(y))
     x0 = optimal_initialization(reshapen_phase_fourier_basis, y, b)
-    ψ, loss = poisson_phase_retrieval(reshapen_phase_fourier_basis, x0, y, b, 200, Val(true))
-
-    # println("Computed Loss: $loss")
-    # println("----------------")
-    # println("Loss at true state: $(loss[end])")
-    # println("Loss at solution state: $(compute_loss(ψ, reshapen_phase_fourier_basis, y, b))")
+    ψ, loss = poisson_phase_retrieval(reshapen_phase_fourier_basis, x0, y, b, 50, Val(true))
 
     normalize!(ψ)
     fidelities[mode_index] = abs2(coefficient ⋅ ψ)
 
-    # predicted_image = reshape(get_probabilities(measurement_matrix, traceless_vectorization(psi)), size(image))
-
-    # plot_images = (theoretical_image, zero2nan.(image), predicted_image)
-    # fig_titles = ("Theory", "Experiment", "Prediction")
-
-    # if mode_index < 10
-    #     with_theme(theme_latexfonts()) do
-    #         figure = Figure(size=(1000, 400))
-
-    #         for n ∈ 1:3
-    #             ax = Axis(figure[1, n], title=fig_titles[n], aspect=1)
-    #             heatmap!(ax, plot_images[n])
-    #             hidedecorations!(ax)
-    #         end
-    #         Label(figure[0, :], "Fidelity: $(round(Int, 100*fidelities[mode_index])) %", fontsize=16, font=:bold)
-    #         save("plots/temp_$mode_index.png", figure)
-    #     end
-    # end
     next!(p)
 end
 
