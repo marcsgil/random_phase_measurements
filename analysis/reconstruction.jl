@@ -70,6 +70,13 @@ end
 fidelities = h5open(joinpath(order_directory, "data.h5"), "r") do file
     images_dataset = file["images_phase_fourier"]
     fidelities = Array{Float64}(undef, size(images_dataset)[3:end])
+
+    h5open(joinpath(order_directory, "fidelities.h5"), "cw") do f
+        if haskey(f, "fidelities")
+            throw(ArgumentError("Cannot create dataset, it already exists"))
+        end
+    end
+
     p = Progress(length(fidelities))
 
     for sigma_index ∈ axes(fidelities, 3), phase_index ∈ axes(fidelities, 2)
@@ -111,8 +118,13 @@ fidelities = h5open(joinpath(order_directory, "data.h5"), "r") do file
         end
     end
 
+    h5open(joinpath(order_directory, "fidelities.h5"), "w") do f
+        f["fidelities"] = fidelities
+    end
+
     fidelities
 end
 fidelities
 ##
 dropdims(mean(fidelities, dims=1), dims=1)
+##
