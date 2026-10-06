@@ -1,21 +1,12 @@
-using CairoMakie, FFTW, HDF5, LinearAlgebra, PoissonPhaseRetrieval, ProgressMeter, Statistics
+using CairoMakie, FFTW, HDF5, LinearAlgebra, PoissonPhaseRetrieval, ProgressMeter, Statistics, FourierTools
 
-result_directory = "results/new/big"
-order_directory = joinpath(result_directory, "up_to_order_4")
-sigma_index = 3
-phase_index = 2
+result_directory = "results/test"
+order_directory = joinpath(result_directory, "up_to_order_2")
+sigma_index = 1
+phase_index = 1
 
-background_direct, background_fourier, background_phase_fourier = h5open(
-    joinpath(result_directory, "background.h5"), "r"
-) do file
-    read(file["images_direct"]),
-    read(file["images_fourier"]),
-    read(file["images_phase_fourier"])
-end
-
-function fourier_transform(u)
-    dims = (1, 2)
-    fftshift(fft(ifftshift(u, dims), dims), dims) / sqrt(size(u, 1) * size(u, 2))
+function fourier_transform(u, zoom=1)
+    czt(u, (zoom, zoom, 1), (1,2))
 end
 
 remove_background(image::T, background) where {T} = image > background + 1 ? image - background - one(T) : zero(image-background - one(T))
@@ -26,23 +17,25 @@ function center_crop(image, crop_size)
     column = (size(image, 2) - crop_size) ÷ 2 + 1
     @view image[row:(row+crop_size-1), column:(column+crop_size-1)]
 end
-
-coefficients = h5open(joinpath(order_directory, "modes.h5"), "r") do file
-    read(file["coefficients"])
+##
+coefficients, basis = h5open(joinpath(order_directory, "modes.h5")) do file
+    read(file["coefficients"]), read(file["basis"])
 end
 
-phase_factor, basis = h5open(joinpath(result_directory, "prepared.h5"), "r") do file
-    order_name = basename(order_directory)
-    file["phase_factors"][:, :, phase_index, sigma_index], read(file["orders/$order_name/basis"])
+phase = h5open(joinpath(result_directory,  "phases.h5")) do file
+    file["phases"][:, :, phase_index, sigma_index]
 end
 
 images = h5open(joinpath(order_directory, "data.h5"), "r") do file
     file["images_phase_fourier"][:, :, :, phase_index, sigma_index]
 end;
 
+zoom = h5open(joinpath(result_directory, "calibration_data", "calibration.h5")) do file
+    read(file["zoom"])
+end
 
-basis ./= sqrt.(sum(abs2, basis, dims=(1, 2)))
-phase_fourier_basis = fourier_transform(basis .* phase_factor)
+phase_fourier_basis = fourier_transform(basis .* cis.(phase), zoom)
+phase_fourier_basis ./= sqrt.(sum(abs2, phase_fourier_basis, dims=(1, 2)))
 reshapen_phase_fourier_basis = reshape(phase_fourier_basis, :, size(phase_fourier_basis, 3))
 ##
 mkpath("plots")
@@ -54,14 +47,14 @@ p = Progress(length(indices))
 
 for mode_index in indices
     coefficient = coefficients[:, mode_index]
-    # image = remove_background.(
-    #     images[:, :, mode_index],
-    #     background_phase_fourier[:, :, sigma_index],
-    # )
+    image = remove_background.(
+        images[:, :, mode_index],
+        3,
+    )
     image = images[:, :, mode_index]
 
     y = vec(image)
-    b = vec(background_phase_fourier[:, :, sigma_index])
+    b = zero(y)
     x0 = optimal_initialization(reshapen_phase_fourier_basis, y, b)
     ψ, loss = poisson_phase_retrieval(reshapen_phase_fourier_basis, x0, y, b, 200, Val(true))
 

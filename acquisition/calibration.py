@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 from slm_camera_calibration import calibrate
-from common.utils import generate_amplitude_and_phase_hologram, inverse_fourier_transform
+from common.utils import generate_amplitude_and_phase_hologram, inverse_fourier_transform, calculate_centroid
 import slmcontrol
 import matplotlib.pyplot as plt
 import h5py
@@ -56,12 +56,13 @@ def main(result_directory, config_path=Path("config.toml")):
     with CustomXimea() as camera:
         camera.set_exposure(config["fourier_camera"]["calibration_exposure"])
         holo = mode2holo(slm, config, slmcontrol.hg(xs, ys, w=config["fourier_camera"]["coarse_calibration_waist"]))
-        slm.updateArray(holo)
+        slm.updateArray(holo, sleep_time=config["capture"]["settling_time_s"])
         image = camera.capture()
         plt.imshow(image)
         plt.savefig(plots_directory / "coarse_calibration_full.png")
         camera.calibrate(N, image)
-        plt.imshow(camera.capture())
+        image_calibrated = camera.capture()
+        plt.imshow(image_calibrated)
         plt.savefig(plots_directory / "coarse_calibration.png")
 
         result_fourier = calibrate(
@@ -75,18 +76,28 @@ def main(result_directory, config_path=Path("config.toml")):
             settle_time=config["capture"]["settling_time_s"],
         )
         result_fourier.save(calibration_path)
+        det_matrix = np.linalg.det(result_fourier.transform.matrix)
+        det_sign = np.sign(det_matrix)
+        zoom = np.sqrt(np.abs(det_matrix))
+        angle = np.atan2(result_fourier.transform.matrix[1, 0], result_fourier.transform.matrix[0, 0])
+
+        shift = np.asarray([N, N]) // 2 - calculate_centroid(image_calibrated, 0.5)
+
         with h5py.File(calibration_path, "a") as f:
             f["calibration_image"] = image
             f["N"] = N
             f["offsetY"] = camera.get_offsetY()
             f["offsetX"] = camera.get_offsetX()
+            f["det_sign"] = det_sign
+            f["zoom"] = zoom
+            f["angle"] = angle
+            f["shift"] = shift
     slm.close()
 
-    det_matrix = np.linalg.det(result_fourier.transform.matrix)
-    
-    print(f"Determinant signal: {np.sign(det_matrix)}")
-    print(f"Magnification: {np.sqrt(np.abs(det_matrix)):.2f}")
-    print(f"Angle: {np.rad2deg(np.atan2(result_fourier.transform.matrix[1, 0], result_fourier.transform.matrix[0, 0])):.4f} degrees")
+    print(f"Determinant signal: {det_sign}")
+    print(f"Zoom: {zoom:.2f}")
+    print(f"Angle: {np.rad2deg(angle):.4f} degrees")
+    print(f"Residual shift: {shift}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calibrate the direct and Fourier camera images.")
