@@ -27,7 +27,7 @@ A normalized complex state in dimension $d$, modulo global phase, has
 $2d-2$ real parameters. This note constructs local coordinates for those
 parameters and derives the classical Fisher information for intensity
 measurements, with the aim of comparing reconstruction quality as the
-phase-screen parameters, especially the spectral width $\sigma$, change.
+phase-screen parameters, especially the relative correlation distance $\zeta=r_c/w$, change.
 The main analysis uses a fixed estimated signal power and background,
 appropriate to the intended intense-laser experiment with negligible camera
 cropping. It relates the inverse Fisher trace to local infidelity and
@@ -73,8 +73,8 @@ At $L=4$, $d=15$: pure-state estimation needs 28 real state parameters,
 whereas unrestricted density-matrix tomography needs 224.
 
 \subsection{Experimental regime and power convention}
-The objective is to compare phase screens, mainly as their spectral width
-$\sigma$ changes, rather than to study uncertainty in optical power.
+The objective is to compare phase screens, mainly as their relative correlation distance
+$\zeta=r_c/w$ changes, rather than to study uncertainty in optical power.
 The intended experiment uses intense laser illumination, an independently
 estimated background, and camera coverage with no substantial cropping.
 We therefore treat the estimated signal power and background as fixed in
@@ -82,7 +82,7 @@ the main Fisher calculation. Their estimation uncertainty is neglected in
 this approximation; the background is not assumed to be physically zero.
 
 If the calibrated propagation approximately preserves power on the mode
-subspace, $A_\sigma^\dagger A_\sigma\approx I$, a per-image estimate is
+subspace, $A_\zeta^\dagger A_\zeta\approx I$, a per-image estimate is
 \begin{equation}
  \widehat s=\sum_i(y_i-\widehat b_i),\qquad
  \widehat{\sqrt{s}}=\sqrt{\widehat s}.
@@ -91,7 +91,7 @@ subspace, $A_\sigma^\dagger A_\sigma\approx I$, a per-image estimate is
 Here $\widehat s$ is required to be positive. The sum uses the signed
 background-subtracted values, without clipping individual pixels, since
 clipping would bias the total upwards. If the common power convention is
-$A_\sigma^\dagger A_\sigma\approx\alpha I$, divide the sum by $\alpha$.
+$A_\zeta^\dagger A_\zeta\approx\alpha I$, divide the sum by $\alpha$.
 Column normalization alone does not establish either identity; the basis
 must also remain approximately orthogonal on the detector grid.
 
@@ -104,7 +104,7 @@ The existing unconstrained solver may continue to fit the norm of $x$
 implicitly and normalize its output; this diagnostic convention does not
 require changing the solver.
 
-For controlled comparisons between $\sigma$ values, use a common reference
+For controlled comparisons between $\zeta$ values, use a common reference
 signal power $s_{\mathrm{ref}}$, background model, and set of test states.
 This isolates the change in the measurement from incidental brightness
 variation. Per-image power estimates remain useful for interpreting actual
@@ -123,57 +123,56 @@ in Appendix~\ref{app:unknown-power}.
 \section{Characterizing phase-screen scale and strength}\label{sec:screen-parameters}
 The phase-screen parameters should describe two separate physical properties:
 the spatial scale of the phase variations and their statistical strength.
-For the proposed comparison, the strength is held fixed while the spatial
-scale is varied. This section translates the current generator's parameters
-into those properties; the proposed defaults below do not change the code.
+For the main comparison, the strength is held fixed while the spatial
+scale is varied. This section describes the revised generator defaults:
+a $1/e$ correlation distance $r_c$ and spectral amplitude $2\pi^2$.
 
-\subsection{From spectral width to spatial correlation length}
+\subsection{Spatial correlation distance and its configuration convention}
 The generator in \texttt{acquisition/generate\_phase\_masks.py} uses
 \begin{equation}
- S(\mathbf q)=\frac{\mathcal A}{2\pi\sigma^2}
- \exp\!\left(-\frac{q_x^2+q_y^2}{2\sigma^2}\right),
- \qquad \mathcal A=\texttt{amplitude}.
+ S(\mathbf q)=\frac{\mathcal A r_c^2}{4\pi}
+ \exp\!\left[-\frac{r_c^2(q_x^2+q_y^2)}4\right],
+ \qquad \mathcal A=\texttt{amplitude}=2\pi^2\quad\text{by default}.
  \label{eq:screen-spectrum}
 \end{equation}
 Its frequency grid uses angular spatial frequency:
 $q_x=2\pi k_x/(N_x\,dx)$ and $q_y=2\pi k_y/(N_y\,dy)$, with the usual
-FFT ordering of signed indices. Thus $\sigma$ is in inverse spatial units
-(with angular frequency convention); for $dx=dy=1$, distances are in pixels.
+FFT ordering of signed indices. For $dx=dy=1$, $r_c$ is in pixels.
 There is no extra factor of $2\pi$ in the conversion below.
 
-Let $g(\mathbf r)$ denote the zero-mean Gaussian phase field before wrapping.
+Let $g(\mathbf r)$ denote the zero-mean Gaussian phase field before wrapping,
+with ensemble RMS $\phi_{\mathrm{rms}}=\sqrt{\E[g^2]}$.
 By the covariance--spectrum Fourier relation, the continuous, large-grid
 approximation gives
 \begin{equation}
  C_g(r)=\E[g(\mathbf r)g(\mathbf0)]
- =V\exp\!\left(-\frac{\sigma^2r^2}{2}\right)
- =V\exp\!\left(-\frac{r^2}{2\ell^2}\right),
- \qquad \boxed{\ell=\frac1\sigma},\quad V=C_g(0).
+ =\phi_{\mathrm{rms}}^2\exp\!\left(-\frac{r^2}{r_c^2}\right),
+ \qquad \boxed{C_g(r_c)/C_g(0)=e^{-1}},\quad \phi_{\mathrm{rms}}^2=C_g(0).
  \label{eq:phase-covariance}
 \end{equation}
-This is the Gaussian, or squared-exponential, covariance function
-\cite{rasmussen2006}. We define $\ell$ as its length-scale parameter:
-$C_g(\ell)/C_g(0)=e^{-1/2}$. If a distance at correlation $1/e$ is
-preferred, it is $r_c=\sqrt2\ell$. The convention should be stated rather
-than calling either quantity simply ``the correlation distance.''
+Thus $r_c$ is the $1/e$ correlation distance of the unwrapped phase.
+In the standard squared-exponential covariance convention
+$\phi_{\mathrm{rms}}^2\exp[-r^2/(2\ell^2)]$ \cite{rasmussen2006}, $\ell=r_c/\sqrt2$.
+The earlier spectral-width convention is related by
+\begin{equation}
+ \sigma=\frac{\sqrt2}{r_c},\qquad \ell=\frac1\sigma.
+\end{equation}
+This is a reparameterization of the same Gaussian spectral family.
 
-For a beam waist $w$, $\ell/w$ gives a spatially intuitive dimensionless
-control parameter. Its inverse, $w/\ell=\sigma w$, increases with the
-number of correlation lengths across one waist. For the existing example
-with $w=50$ pixels,
-\begin{center}
-\begin{tabular}{c|c|c}
-$\sigma$ & $\ell$ (pixels) & $\ell/w$\\\hline
-0.02 & 50.0 & 1.00\\
-0.04 & 25.0 & 0.50\\
-0.06 & 16.7 & 0.33\\
-0.08 & 12.5 & 0.25
-\end{tabular}
-\end{center}
-A plot against $\sigma$ can therefore include a corresponding correlation
-length scale, or use $w/\ell$ as its main dimensionless horizontal axis.
-This reparameterization changes the interpretation, not the family of
-screens being tested.
+For a beam waist $w$, define the dimensionless parameter
+\begin{equation}
+ \boxed{\zeta=\frac{r_c}{w}.}
+\end{equation}
+Correlation distances are specified in units of the beam waist, as the
+ratios $\zeta=r_c/w$. The script converts them to grid units by multiplying
+by the waist before generating the screens and saving the lengths in the
+HDF5 \texttt{correlation\_lengths} dataset. Dividing these saved lengths by
+the waist recovers the specified ratios. Larger $\zeta$ produces
+smoother screens; smaller $\zeta$ produces shorter variations and larger
+phase gradients. Plots may use $\zeta$ directly, or $1/\zeta=w/r_c$ if an
+axis increasing with roughness is preferred. Throughout the measurement
+comparisons below, subscripts $\zeta$ label the screen scale; individual
+realizations at the same scale still have different measurement matrices.
 
 \subsection{What the amplitude parameter actually controls}
 The normalization in \eqref{eq:screen-spectrum} gives
@@ -183,7 +182,7 @@ $\sqrt{S\,\Delta q_x\Delta q_y}$, Fourier transformed with no inverse
 normalization, and then their real part is taken. Each complex Gaussian
 coefficient has real and imaginary variances $1/2$. It follows that
 \begin{equation}
- V_{\mathrm{grid}}=\frac12\sum_{k_x,k_y}
+ \phi_{\mathrm{rms,grid}}^2=\frac12\sum_{k_x,k_y}
  S(q_x,q_y)\,\Delta q_x\Delta q_y
  \approx\frac{\mathcal A}{2},\qquad
  \boxed{\phi_{\mathrm{rms}}=\sqrt{\E[g^2]}
@@ -195,64 +194,63 @@ ensemble RMS phase, in radians. It is not the RMS of the displayed wrapped
 angles. The factor $1/2$ belongs to this particular complex-noise/real-part
 construction and should be revisited if the generator is changed.
 
-The generator returns $\phi=\operatorname{mod}(g,2\pi)-\pi$, so its
-stored angles always lie in $[-\pi,\pi)$, regardless of $\mathcal A$.
-This interval is a representation convention, not a measure of phase
-strength. Also, $e^{i\phi}=-e^{ig}$; the extra constant sign is a global
-phase and has no effect on the measured intensities or spatial correlation
-of phase differences.
+The generator returns $\phi=\operatorname{Arg}(e^{ig})$, implemented as
+\texttt{angle(exp(1j*g))}. Its stored angles lie in the principal range
+$[-\pi,\pi]$, regardless of $\mathcal A$, and $e^{i\phi}=e^{ig}$ exactly.
+This range is a representation convention, not a measure of phase strength.
 
-The current and proposed settings have the following interpretations:
+The spectral amplitude and corresponding strengths are:
 \begin{center}
 \begin{tabular}{c|c}
 Spectral parameter $\mathcal A$ & Approximate unwrapped $\phi_{\mathrm{rms}}$\\\hline
-$\pi$ (current setting) & $\sqrt{\pi/2}\simeq1.25$ rad\\
+$\pi$ (earlier setting) & $\sqrt{\pi/2}\simeq1.25$ rad\\
 $\pi^2$ & $\pi/\sqrt2\simeq2.22$ rad\\
-$2\pi^2$ (proposed main setting) & $\pi\simeq3.14$ rad\\
-$\pi^2/2$ (proposed comparison) & $\pi/2\simeq1.57$ rad
+$2\pi^2$ (implemented default) & $\pi\simeq3.14$ rad\\
+$\pi^2/2$ (optional weaker comparison) & $\pi/2\simeq1.57$ rad
 \end{tabular}
 \end{center}
 Fixing $\phi_{\mathrm{rms}}=\pi$ is a deliberate strong-modulation baseline,
 not a claim of an optimal strength or of a hard unwrapped phase limit.
-The proposed main sweep varies $\ell/w$ at this fixed strength. A smaller
+The main sweep varies $\zeta=r_c/w$ at this fixed strength. A smaller
 strength, such as $\pi/2$, can be tested on a subset to check whether the
-qualitative conclusions depend on the strength choice. No change to the
-existing configuration or generator is implied by this proposal.
+qualitative conclusions depend on the strength choice. The current acquisition
+script uses the generator's fixed amplitude default; an amplitude entry in
+the configuration is not used by this script.
 
 \subsection{Correlation of the phase factor actually applied to light}
 The optical transformation depends on $P=e^{i\phi}$, rather than on the
 choice of representative angle. Gaussian phase differences satisfy
 \begin{equation}
  D_g(r)=\E[(g(\mathbf r)-g(\mathbf0))^2]
- =2V\left(1-e^{-r^2/(2\ell^2)}\right).
+ =2\phi_{\mathrm{rms}}^2\left(1-e^{-r^2/r_c^2}\right).
 \end{equation}
 For a zero-mean Gaussian variable $Z$, $\E[e^{iZ}]=e^{-\operatorname{Var}(Z)/2}$.
 Applying this identity to the phase difference gives
 \begin{equation}
  R_P(r)=\E[P(\mathbf r)P(\mathbf0)^*]
- =\exp\!\left[-V\left(1-e^{-r^2/(2\ell^2)}\right)\right].
+ =\exp\!\left[-\phi_{\mathrm{rms}}^2\left(1-e^{-r^2/r_c^2}\right)\right].
  \label{eq:phase-factor-correlation}
 \end{equation}
 This is the phase-factor correlation, normalized by $R_P(0)=1$, without
-subtracting its mean. It approaches $e^{-V}$ at large separation.
-For $g$, $|\E[e^{ig}]|=e^{-V/2}$, so that limit is the squared coherent mean.
-For the proposed $V=\pi^2$, the mean magnitude is about $0.0072$ and the
+subtracting its mean. It approaches $e^{-\phi_{\mathrm{rms}}^2}$ at large separation.
+For $g$, $|\E[e^{ig}]|=e^{-\phi_{\mathrm{rms}}^2/2}$, so that limit is the squared coherent mean.
+For the default $\phi_{\mathrm{rms}}\approx\pi$, the mean magnitude is about $0.0072$ and the
 wrapped one-point phase distribution is nearly uniform. This does not
 mean that nearby pixels are independent.
 
-For $r\ll\ell$,
+For $r\ll r_c$,
 \begin{equation}
- R_P(r)\approx\exp\!\left(-\frac{Vr^2}{2\ell^2}\right).
+ R_P(r)\approx\exp\!\left(-\frac{\phi_{\mathrm{rms}}^2 r^2}{r_c^2}\right).
 \end{equation}
 Consequently, for strong modulation its short-distance length scale is
-approximately $\ell/\phi_{\mathrm{rms}}$. The underlying phase correlation
+approximately $r_c/\phi_{\mathrm{rms}}$, when defined at correlation $1/e$. The underlying phase correlation
 length and the optical phase-factor correlation length are distinct;
-changing strength changes the latter even when $\ell$ is fixed. At fixed
-$V$, the mean-square phase gradient is
+changing strength changes the latter even when $r_c$ is fixed. At fixed
+$\phi_{\mathrm{rms}}$, the mean-square phase gradient is
 \begin{equation}
- \E[|\nabla g|^2]=\frac{2V}{\ell^2}=2V\sigma^2,
+ \E[|\nabla g|^2]=\frac{4\phi_{\mathrm{rms}}^2}{r_c^2}=2\phi_{\mathrm{rms}}^2\sigma^2,
 \end{equation}
-which makes the increase in gradient roughness with $\sigma$ explicit.
+which makes the increase in gradient roughness as $r_c$ decreases explicit.
 Gaussian screens remain mathematically smooth; ``rougher'' here means
 shorter spatial variations and larger typical gradients, not a change in
 differentiability class.
@@ -278,7 +276,7 @@ its covariance or structure function. With only wrapped angles available,
 use $P(\mathbf r)P(\mathbf r+\Delta\mathbf r)^*$ and average over positions
 and realizations, comparing with \eqref{eq:phase-factor-correlation}.
 Ordinary differences of wrapped angles can introduce artificial jumps at
-the branch cut. Expressing scale as $\ell/w$ and strength as
+the branch cut. Expressing scale as $r_c/w$ and strength as
 $\phi_{\mathrm{rms}}$ makes the design reproducible and separates the two
 controls relevant to the rank and Fisher comparisons.
 
@@ -406,29 +404,29 @@ a direction. Thus full tangent Fisher rank at a sampled state is not a
 certificate of global pure-state uniqueness.
 
 \subsection{Full-tomography rank as a sufficient uniqueness test}
-For each phase screen, let $T_\sigma$ be the traceless part of the
+For each phase screen, let $T_\zeta$ be the traceless part of the
 full-tomography measurement matrix, so that the signal measurements have
 an affine dependence on Bloch coordinates:
 \begin{equation}
- q(\rho)=c_\sigma+T_\sigma t,\qquad
- q(\rho_1)-q(\rho_2)=T_\sigma(t_1-t_2).
+ q(\rho)=c_\zeta+T_\zeta t,\qquad
+ q(\rho_1)-q(\rho_2)=T_\zeta(t_1-t_2).
 \end{equation}
 At fixed nonzero power and known background, equality of Poisson means
 is equivalent to equality of these signal measurements. Therefore
 \begin{equation}
- \rank(T_\sigma)=d^2-1
+ \rank(T_\zeta)=d^2-1
  \quad\Longrightarrow\quad
  \text{global uniqueness for all density matrices, hence all pure states}.
  \label{eq:full-rank-sufficient}
 \end{equation}
-If $T_\sigma$ is deficient, a nonzero kernel direction generates
+If $T_\zeta$ is deficient, a nonzero kernel direction generates
 indistinguishable physical density matrices around the maximally mixed
 state. It does not necessarily generate indistinguishable pure states.
 Full-tomography rank is therefore sufficient, but not necessary, for the
 pure-state objective.
 
 For strictly positive outcome probabilities, the full-tomography Fisher
-matrix has the same rank as $T_\sigma$, since its diagonal weighting is
+matrix has the same rank as $T_\zeta$, since its diagonal weighting is
 invertible. Its rank consequently has a global implication because the
 measurement map is affine, even though the Fisher matrix itself describes
 local uncertainty. Its eigenvalues and inverse trace remain state dependent.
@@ -436,16 +434,16 @@ local uncertainty. Its eigenvalues and inverse trace remain state dependent.
 \subsection{The exact pure-state criterion, when needed}
 Define the linear measurement map on Hermitian matrices by
 \begin{equation}
- \mathcal L_\sigma(X)_i=\tr(E_{\sigma,i}X).
+ \mathcal L_\zeta(X)_i=\tr(E_{\sigma,i}X).
 \end{equation}
 Two normalized pure states have the same image exactly when
-$\mathcal L_\sigma(\psi\psi^\dagger-\phi\phi^\dagger)=0$.
+$\mathcal L_\zeta(\psi\psi^\dagger-\phi\phi^\dagger)=0$.
 Their difference is Hermitian, traceless, and has rank at most two.
 Conversely, a nonzero traceless Hermitian matrix of rank at most two has
 spectral form $a(uu^\dagger-vv^\dagger)$, where $a\ne0$ and $u,v$ are
 orthonormal. Hence
 \begin{equation}
-\boxed{\ker\mathcal L_\sigma\ \cap\
+\boxed{\ker\mathcal L_\zeta\ \cap\
  \{X=X^\dagger:\ \tr X=0,\ \rank X\le2\}=\{0\}.}
 \end{equation}
 This condition is equivalent to global uniqueness among normalized pure states.
@@ -455,10 +453,10 @@ in tomography with prior information and complex phase retrieval
 
 An optional global separation diagnostic is
 \begin{equation}
- \beta_\sigma=\min_{\substack{X=X^\dagger,\ \tr X=0\\
- \rank X\le2,\ \norm{X}_F=1}}\norm{\mathcal L_\sigma(X)}_2.
+ \beta_\zeta=\min_{\substack{X=X^\dagger,\ \tr X=0\\
+ \rank X\le2,\ \norm{X}_F=1}}\norm{\mathcal L_\zeta(X)}_2.
 \end{equation}
-The constraint set is compact. Consequently, $\beta_\sigma>0$ is equivalent
+The constraint set is compact. Consequently, $\beta_\zeta>0$ is equivalent
 to global uniqueness, and zero indicates an exact ambiguity. It can be
 searched over $X=(uu^\dagger-vv^\dagger)/\sqrt2$ with orthonormal $u,v$.
 A local numerical search that finds a collision provides evidence of
@@ -469,17 +467,17 @@ the proposed main results wherever \eqref{eq:full-rank-sufficient} applies.
 \subsection{Two complementary results versus screen roughness}
 The proposed presentation consists of two separate results:
 \begin{enumerate}
- \item \textbf{Full-tomography rank versus $\sigma$.}
- Plot $\rank(T_\sigma)$, or its normalized value
- $\rank(T_\sigma)/(d^2-1)$, and identify the sampled region where full
+ \item \textbf{Full-tomography rank versus $\zeta$.}
+ Plot $\rank(T_\zeta)$, or its normalized value
+ $\rank(T_\zeta)/(d^2-1)$, and identify the sampled region where full
  column rank is obtained. For order up to 4, the target rank is 224.
  This establishes a sufficient global uniqueness criterion for the modeled
- measurement. Use the traceless matrix $T_\sigma$, not the complex optical
- matrix $A_\sigma$ and not the matrix including the identity column.
+ measurement. Use the traceless matrix $T_\zeta$, not the complex optical
+ matrix $A_\zeta$ and not the matrix including the identity column.
  In \texttt{QuantumMeasurements}, it is obtained with
  \texttt{get\_traceless\_part(measurement\_matrix)}.
- \item \textbf{Pure-state inverse Fisher trace versus $\sigma$.}
- Evaluate $\tr(F_{\mathrm{pure}}(\sigma;\psi)^{-1})$ at common signal power
+ \item \textbf{Pure-state inverse Fisher trace versus $\zeta$.}
+ Evaluate $\tr(F_{\mathrm{pure}}(\zeta;\psi)^{-1})$ at common signal power
  and background over the same normalized test states. Report a central
  statistic and spread across states and screen realizations. For order
  up to 4, this Fisher matrix has dimension 28. Lower inverse trace means
@@ -494,9 +492,9 @@ singular value. State the grid, model, arithmetic precision, and tolerance,
 and examine the smallest singular values near the apparent transition.
 A weak phase screen can lift an exact degeneracy by an extremely small
 amount: an observed onset of numerical full rank need not be a sharp
-mathematical threshold in $\sigma$. Repeat the calculation for several
+mathematical threshold in $\zeta$. Repeat the calculation for several
 screen realizations; a region found on a sampled grid is not a guarantee
-for every screen or every intermediate value of $\sigma$.
+for every screen or every intermediate value of $\zeta$.
 
 The second result shows precision within the identifiable region, which
 rank alone cannot quantify. It can also be evaluated outside that region,
@@ -572,7 +570,7 @@ This is a Gram matrix of the weighted state derivatives. Prefer computing
 an SVD of $G$ directly: forming its Gram matrix squares the condition number
 and can obscure small singular values. Let
 $\tau_1\ge\cdots\ge\tau_{2d-2}$ be the singular values of $G$; the symbol
-$\tau$ distinguishes them from the phase-screen parameter $\sigma$. Then
+$\tau$ distinguishes them from the phase-screen parameter $\zeta$. Then
 \begin{equation}
  \rank(F_{\mathrm{pure}})=\rank(G),\qquad
  \kappa_2(F_{\mathrm{pure}})=\left(\frac{\tau_1}{\tau_{2d-2}}\right)^2,
@@ -592,20 +590,20 @@ little information when $\epsilon$ is small. Report the inverse trace and
 smallest eigenvalue as well, with a fixed resource convention (incident
 brightness or detected photon number).
 
-For each tested $\sigma$, screen realization, and normalized input state,
-construct $A_\sigma$, the state tangent basis, and $J_\sigma$. At common
+For each tested $\zeta$, screen realization, and normalized input state,
+construct $A_\zeta$, the state tangent basis, and $J_\zeta$. At common
 power and background, the comparison uses
 \begin{equation}
- F_{\mathrm{pure}}(\sigma;\psi)
- =s_{\mathrm{ref}}^2J_\sigma^{\mathsf T}
- \diag\!\left(\frac{1}{s_{\mathrm{ref}}|(A_\sigma\psi)_i|^2+b_i}\right)
- J_\sigma.
+ F_{\mathrm{pure}}(\zeta;\psi)
+ =s_{\mathrm{ref}}^2J_\zeta^{\mathsf T}
+ \diag\!\left(\frac{1}{s_{\mathrm{ref}}|(A_\zeta\psi)_i|^2+b_i}\right)
+ J_\zeta.
 \end{equation}
 The diagonal entries are understood pixel by pixel. Evaluate the same
 collection of Haar-sampled normalized states for all screens. Report the
 fraction of deficient cases, median inverse trace, an upper quantile or
 worst observed value, smallest eigenvalue, and condition number. Include
-several screen realizations at each $\sigma$ to distinguish systematic
+several screen realizations at each $\zeta$ to distinguish systematic
 parameter effects from one favorable or unfavorable realization.
 
 Compare these statistical diagnostics with experimental fidelities and
@@ -614,7 +612,7 @@ predicts local sensitivity to measurement noise near the evaluated state;
 it does not predict whether spectral initialization reaches the correct
 optimization basin. A screen can have good local information and still
 produce poor reconstruction with a particular optimizer. Thus fidelity
-versus $\sigma$ reflects both the measurement design and solver behavior.
+versus $\zeta$ reflects both the measurement design and solver behavior.
 
 Zero-probability pixels need special care: the regular formulas can contain
 $0/0$, and their limits may depend on the approach direction. A physical

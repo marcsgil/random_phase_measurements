@@ -8,8 +8,8 @@ import numpy as np
 from jax import Array, random
 
 
-def gaussian_spectrum(qx, qy, amplitude, sigma):
-    return amplitude * jnp.exp(-(qx**2 + qy**2) / 2 / sigma**2) / 2 / jnp.pi / sigma**2
+def gaussian_spectrum(qx, qy, rc, amplitude=2 * np.pi**2):
+    return amplitude * jnp.exp(-(rc**2 * (qx**2 + qy**2)) / 4) * rc**2 / 4 / jnp.pi
 
 
 def fourier_phase_screen(
@@ -30,38 +30,47 @@ def fourier_phase_screen(
     spectrum_value = spectrum(qxs, qys, **kwargs) * dqx * dqy
     shape = (ny, nx) if num_samples is None else (num_samples, ny, nx)
     random_numbers = random.normal(key, shape=shape, dtype=jnp.complex64)
-    return jnp.mod(jnp.real(jnp.fft.ifft2(random_numbers * jnp.sqrt(spectrum_value), norm="forward")), 2 * jnp.pi) - jnp.pi
+    return jnp.angle(
+        jnp.exp(
+            1j
+            * jnp.real(
+                jnp.fft.ifft2(random_numbers * jnp.sqrt(spectrum_value), norm="forward")
+            )
+        )
+    )
 
 
 def main(result_directory):
     result_directory = Path(result_directory)
     if not result_directory.exists():
-            raise ValueError(f"Directory {str(result_directory)} does not exist. The calibration must be run beforehand, which creates the directory.")
+        raise ValueError(
+            f"Directory {str(result_directory)} does not exist. The calibration must be run beforehand, which creates the directory."
+        )
     config_path = result_directory / "config.toml"
     with config_path.open("rb") as file:
         config = tomllib.load(file)
 
     size = config["grid"]["size"]
     phase_config = config["phases"]
-    sigmas = np.asarray(phase_config["sigmas"])
-    keys = random.split(random.key(phase_config["seed"]), len(sigmas))
+    correlation_lengths = (
+        np.asarray(phase_config["correlation_lengths"]) * config["modes"]["waist"]
+    )
+    keys = random.split(random.key(phase_config["seed"]), len(correlation_lengths))
     phases = np.asarray(
         [
             fourier_phase_screen(
                 size,
                 size,
-                amplitude=phase_config["amplitude"],
-                sigma=sigma,
+                rc=rc,
                 num_samples=phase_config["num_samples"],
                 key=key,
             )
-            for sigma, key in zip(sigmas, keys)
+            for rc, key in zip(correlation_lengths, keys)
         ]
     )
     with h5py.File(result_directory / "phases.h5", "a") as file:
         file["phases"] = phases
-        file["sigmas"] = sigmas
-        file["amplitude"] = phase_config["amplitude"]
+        file["correlation_lengths"] = correlation_lengths
         file["grid_shape"] = (size, size)
         file["seed"] = phase_config["seed"]
 
