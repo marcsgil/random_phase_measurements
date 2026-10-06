@@ -120,6 +120,168 @@ as an approximation in the intense regime. The exact correction for unknown
 power, including its assumptions and numerical implementation, is developed
 in Appendix~\ref{app:unknown-power}.
 
+\section{Characterizing phase-screen scale and strength}\label{sec:screen-parameters}
+The phase-screen parameters should describe two separate physical properties:
+the spatial scale of the phase variations and their statistical strength.
+For the proposed comparison, the strength is held fixed while the spatial
+scale is varied. This section translates the current generator's parameters
+into those properties; the proposed defaults below do not change the code.
+
+\subsection{From spectral width to spatial correlation length}
+The generator in \texttt{acquisition/generate\_phase\_masks.py} uses
+\begin{equation}
+ S(\mathbf q)=\frac{\mathcal A}{2\pi\sigma^2}
+ \exp\!\left(-\frac{q_x^2+q_y^2}{2\sigma^2}\right),
+ \qquad \mathcal A=\texttt{amplitude}.
+ \label{eq:screen-spectrum}
+\end{equation}
+Its frequency grid uses angular spatial frequency:
+$q_x=2\pi k_x/(N_x\,dx)$ and $q_y=2\pi k_y/(N_y\,dy)$, with the usual
+FFT ordering of signed indices. Thus $\sigma$ is in inverse spatial units
+(with angular frequency convention); for $dx=dy=1$, distances are in pixels.
+There is no extra factor of $2\pi$ in the conversion below.
+
+Let $g(\mathbf r)$ denote the zero-mean Gaussian phase field before wrapping.
+By the covariance--spectrum Fourier relation, the continuous, large-grid
+approximation gives
+\begin{equation}
+ C_g(r)=\E[g(\mathbf r)g(\mathbf0)]
+ =V\exp\!\left(-\frac{\sigma^2r^2}{2}\right)
+ =V\exp\!\left(-\frac{r^2}{2\ell^2}\right),
+ \qquad \boxed{\ell=\frac1\sigma},\quad V=C_g(0).
+ \label{eq:phase-covariance}
+\end{equation}
+This is the Gaussian, or squared-exponential, covariance function
+\cite{rasmussen2006}. We define $\ell$ as its length-scale parameter:
+$C_g(\ell)/C_g(0)=e^{-1/2}$. If a distance at correlation $1/e$ is
+preferred, it is $r_c=\sqrt2\ell$. The convention should be stated rather
+than calling either quantity simply ``the correlation distance.''
+
+For a beam waist $w$, $\ell/w$ gives a spatially intuitive dimensionless
+control parameter. Its inverse, $w/\ell=\sigma w$, increases with the
+number of correlation lengths across one waist. For the existing example
+with $w=50$ pixels,
+\begin{center}
+\begin{tabular}{c|c|c}
+$\sigma$ & $\ell$ (pixels) & $\ell/w$\\\hline
+0.02 & 50.0 & 1.00\\
+0.04 & 25.0 & 0.50\\
+0.06 & 16.7 & 0.33\\
+0.08 & 12.5 & 0.25
+\end{tabular}
+\end{center}
+A plot against $\sigma$ can therefore include a corresponding correlation
+length scale, or use $w/\ell$ as its main dimensionless horizontal axis.
+This reparameterization changes the interpretation, not the family of
+screens being tested.
+
+\subsection{What the amplitude parameter actually controls}
+The normalization in \eqref{eq:screen-spectrum} gives
+$\int_{\R^2}S(\mathbf q)\,d^2q=\mathcal A$. In the current implementation,
+independent unit-variance complex Gaussian coefficients are multiplied by
+$\sqrt{S\,\Delta q_x\Delta q_y}$, Fourier transformed with no inverse
+normalization, and then their real part is taken. Each complex Gaussian
+coefficient has real and imaginary variances $1/2$. It follows that
+\begin{equation}
+ V_{\mathrm{grid}}=\frac12\sum_{k_x,k_y}
+ S(q_x,q_y)\,\Delta q_x\Delta q_y
+ \approx\frac{\mathcal A}{2},\qquad
+ \boxed{\phi_{\mathrm{rms}}=\sqrt{\E[g^2]}
+ \approx\sqrt{\frac{\mathcal A}{2}}.}
+ \label{eq:phase-rms}
+\end{equation}
+Here $\phi_{\mathrm{rms}}$ denotes the underlying zero-mean, unwrapped
+ensemble RMS phase, in radians. It is not the RMS of the displayed wrapped
+angles. The factor $1/2$ belongs to this particular complex-noise/real-part
+construction and should be revisited if the generator is changed.
+
+The generator returns $\phi=\operatorname{mod}(g,2\pi)-\pi$, so its
+stored angles always lie in $[-\pi,\pi)$, regardless of $\mathcal A$.
+This interval is a representation convention, not a measure of phase
+strength. Also, $e^{i\phi}=-e^{ig}$; the extra constant sign is a global
+phase and has no effect on the measured intensities or spatial correlation
+of phase differences.
+
+The current and proposed settings have the following interpretations:
+\begin{center}
+\begin{tabular}{c|c}
+Spectral parameter $\mathcal A$ & Approximate unwrapped $\phi_{\mathrm{rms}}$\\\hline
+$\pi$ (current setting) & $\sqrt{\pi/2}\simeq1.25$ rad\\
+$\pi^2$ & $\pi/\sqrt2\simeq2.22$ rad\\
+$2\pi^2$ (proposed main setting) & $\pi\simeq3.14$ rad\\
+$\pi^2/2$ (proposed comparison) & $\pi/2\simeq1.57$ rad
+\end{tabular}
+\end{center}
+Fixing $\phi_{\mathrm{rms}}=\pi$ is a deliberate strong-modulation baseline,
+not a claim of an optimal strength or of a hard unwrapped phase limit.
+The proposed main sweep varies $\ell/w$ at this fixed strength. A smaller
+strength, such as $\pi/2$, can be tested on a subset to check whether the
+qualitative conclusions depend on the strength choice. No change to the
+existing configuration or generator is implied by this proposal.
+
+\subsection{Correlation of the phase factor actually applied to light}
+The optical transformation depends on $P=e^{i\phi}$, rather than on the
+choice of representative angle. Gaussian phase differences satisfy
+\begin{equation}
+ D_g(r)=\E[(g(\mathbf r)-g(\mathbf0))^2]
+ =2V\left(1-e^{-r^2/(2\ell^2)}\right).
+\end{equation}
+For a zero-mean Gaussian variable $Z$, $\E[e^{iZ}]=e^{-\operatorname{Var}(Z)/2}$.
+Applying this identity to the phase difference gives
+\begin{equation}
+ R_P(r)=\E[P(\mathbf r)P(\mathbf0)^*]
+ =\exp\!\left[-V\left(1-e^{-r^2/(2\ell^2)}\right)\right].
+ \label{eq:phase-factor-correlation}
+\end{equation}
+This is the phase-factor correlation, normalized by $R_P(0)=1$, without
+subtracting its mean. It approaches $e^{-V}$ at large separation.
+For $g$, $|\E[e^{ig}]|=e^{-V/2}$, so that limit is the squared coherent mean.
+For the proposed $V=\pi^2$, the mean magnitude is about $0.0072$ and the
+wrapped one-point phase distribution is nearly uniform. This does not
+mean that nearby pixels are independent.
+
+For $r\ll\ell$,
+\begin{equation}
+ R_P(r)\approx\exp\!\left(-\frac{Vr^2}{2\ell^2}\right).
+\end{equation}
+Consequently, for strong modulation its short-distance length scale is
+approximately $\ell/\phi_{\mathrm{rms}}$. The underlying phase correlation
+length and the optical phase-factor correlation length are distinct;
+changing strength changes the latter even when $\ell$ is fixed. At fixed
+$V$, the mean-square phase gradient is
+\begin{equation}
+ \E[|\nabla g|^2]=\frac{2V}{\ell^2}=2V\sigma^2,
+\end{equation}
+which makes the increase in gradient roughness with $\sigma$ explicit.
+Gaussian screens remain mathematically smooth; ``rougher'' here means
+shorter spatial variations and larger typical gradients, not a change in
+differentiability class.
+
+\subsection{Finite-grid and empirical characterization}
+The Fourier construction is periodic, and its exact covariance is a
+finite Fourier sum rather than the infinite-plane Gaussian in
+\eqref{eq:phase-covariance}. The approximation requires resolving the
+spectral peak and avoiding significant truncation at the Nyquist frequency.
+The grid formula in \eqref{eq:phase-rms} provides the actual ensemble
+variance for the chosen discretization.
+
+Individual realizations, and especially their illuminated portions, need
+not have exactly the prescribed RMS. The zero-frequency component also
+contributes an irrelevant random global phase; removing the spatial mean
+removes its contribution from a screen's realized variance. For reported
+strength, distinguish the prescribed ensemble RMS from the measured RMS
+after removing that mean. Use multiple realizations rather than rescaling
+every screen by its extrema, which would change the statistical ensemble.
+
+To check spatial scale empirically, retain the unwrapped field and examine
+its covariance or structure function. With only wrapped angles available,
+use $P(\mathbf r)P(\mathbf r+\Delta\mathbf r)^*$ and average over positions
+and realizations, comparing with \eqref{eq:phase-factor-correlation}.
+Ordinary differences of wrapped angles can introduce artificial jumps at
+the branch cut. Expressing scale as $\ell/w$ and strength as
+$\phi_{\mathrm{rms}}$ makes the design reproducible and separates the two
+controls relevant to the rank and Fisher comparisons.
+
 \section{Removing normalization and global phase}
 Using the real and imaginary parts of all $d$ coefficients gives $2d$
 real coordinates. Normalization removes one degree of freedom; identifying
@@ -826,5 +988,12 @@ A. Conca, D. Edidin, M. Hering, and C. Vinzant,
 \url{https://arxiv.org/abs/1312.0158}.
 Reference for global complex phase-retrieval injectivity and the
 rank-at-most-two Hermitian kernel criterion.
+
+\bibitem{rasmussen2006}
+C. E. Rasmussen and C. K. I. Williams,
+\emph{Gaussian Processes for Machine Learning}, MIT Press (2006), Chapter 4.
+\url{https://gaussianprocess.org/gpml/chapters/RW4.pdf}.
+See the covariance--spectrum relation and the squared-exponential covariance
+function for the interpretation of a Gaussian spatial length scale.
 \end{thebibliography}
 \end{document}
